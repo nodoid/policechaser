@@ -258,6 +258,39 @@ namespace PoliceChaser.Tests
         }
 
         [Fact]
+        public void Checkpoints_patch_one_hull_plate()
+        {
+            Race race = NewRace();
+            race.Traffic.Clear();
+            race.Traffic.Add(new TrafficCar { Z = race.PlayerZ + 60f, X = race.PlayerX, Speed = 0f });
+            race.Update(1f / 60f, Drive());
+
+            int damaged = race.PlayerHealth;
+            Assert.Equal(race.PlayerMaxHealth - 1, damaged);
+
+            for (int i = 0; i < 60 * 60 && race.Checkpoints == 0 && !race.Finished; i++)
+            {
+                race.Traffic.Clear();
+                race.Update(1f / 60f, Drive());
+            }
+
+            Assert.Equal(1, race.Checkpoints);
+            Assert.Equal(damaged + 1, race.PlayerHealth);
+        }
+
+        [Fact]
+        public void Hard_carries_more_armour_and_a_softer_crash_penalty()
+        {
+            Assert.True(DifficultyRules.HullPoints(Difficulty.Hard) >
+                        DifficultyRules.HullPoints(Difficulty.Beginner));
+            Assert.True(DifficultyRules.CrashPenalty(Difficulty.Hard) <
+                        DifficultyRules.CrashPenalty(Difficulty.Beginner));
+
+            Race hard = NewRace(Difficulty.Hard);
+            Assert.Equal(DifficultyRules.HullPoints(Difficulty.Hard), hard.PlayerHealth);
+        }
+
+        [Fact]
         public void Score_uses_the_difficulty_divisor()
         {
             Assert.Equal(1, DifficultyRules.ScoreDivisor(Difficulty.Beginner));

@@ -26,7 +26,8 @@ namespace PoliceChaser.Game
         SuspectEscaping,
         Gunfire,
         PlayerHit,
-        Wrecked
+        Wrecked,
+        Repaired
     }
 
     public struct RaceEvent
@@ -96,7 +97,8 @@ namespace PoliceChaser.Game
         /// Hull points. Traffic is the main danger in Series I; armed Series II suspects also
         /// shoot, so they get one point less to compensate.
         /// </summary>
-        public int PlayerMaxHealth => Mission.SuspectArmed ? 3 : 4;
+        public int PlayerMaxHealth =>
+            Math.Max(1, DifficultyRules.HullPoints(Difficulty) - (Mission.SuspectArmed ? 1 : 0));
         public int PlayerHealth { get; private set; }
 
         public bool Busted { get; private set; }
@@ -350,6 +352,14 @@ namespace PoliceChaser.Game
                 TimeRemaining = MathF.Min(TotalTime + 30f, TimeRemaining + 14f);
                 RawScore += 450 + Checkpoints * 120;
                 Events.Add(new RaceEvent { Type = RaceEventType.Checkpoint, Value = 14 });
+
+                // A checkpoint is also a rolling pit stop: patch one hull plate so a long,
+                // punishing run cannot snowball into an unwinnable one.
+                if (PlayerHealth < PlayerMaxHealth)
+                {
+                    PlayerHealth++;
+                    Events.Add(new RaceEvent { Type = RaceEventType.Repaired, Value = PlayerHealth });
+                }
             }
 
             // ---- traffic -------------------------------------------------------------
@@ -401,7 +411,8 @@ namespace PoliceChaser.Game
                 if ((MathF.Abs(dz) < 430f || crossed) && MathF.Abs(dx) < 0.36f)
                 {
                     Speed *= 0.35f;
-                    TimeRemaining = MathF.Max(0.1f, TimeRemaining - 2.5f);
+                    TimeRemaining = MathF.Max(0.1f,
+                        TimeRemaining - DifficultyRules.CrashPenalty(Difficulty));
                     TrafficHits++;
                     _shake = 1f;
                     PlayerHealth = Math.Max(0, PlayerHealth - 1);

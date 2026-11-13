@@ -137,7 +137,8 @@ dotnet test tests/PoliceChaser.Tests
 ```
 
 The xunit suite covers the race simulation (acceleration, clock drain, off-road handling,
-turbo, ramming, traffic spawning, Series II gunfire and hull damage), the difficulty weighting
+turbo, ramming, traffic spawning, traffic damage, checkpoint repairs, Series II gunfire and hull
+damage), the difficulty weighting
 (1x / 2x / 5x), mission and series data, and high score ordering, truncation, persistence and
 corruption recovery.
 
@@ -151,8 +152,9 @@ dotnet run --project src/PoliceChaser.Desktop -- --selftest race --frames 200 --
 ```
 
 Screens: `splash`, `title`, `difficulty`, `mission`, `briefing`, `briefing2`, `race`, `race2`,
-`race3`, `pads`, `busted`, `gameover`, `name`, `nametap`, `touch`, `scores`. `pads` shows the race
-with the touch overlay forced on, for checking the on-screen controls on a desktop build. `nametap` feeds one simulated
+`race3`, `crash`, `pads`, `busted`, `gameover`, `name`, `nametap`, `touch`, `scores`. `pads` shows
+the race with the touch overlay forced on, `crash` holds the impact sparks on the player car, both
+for checking effects on a desktop build. `nametap` feeds one simulated
 touch tap through the name-entry keys, and `touch` drives a tap through every interactive screen
 (title, high scores, skill, mission, briefing, pause, busted, game over and name entry) and prints
 a pass/fail audit to `<shot>.audit.txt`.

@@ -133,6 +133,29 @@ namespace PoliceChaser.Game
             }
         }
 
+        /// <summary>
+        /// How many traffic crashes the car can survive. Hard mode throws 1.8x the traffic, so it
+        /// carries one spare plate to stay winnable.
+        /// </summary>
+        public static int HullPoints(Difficulty difficulty)
+        {
+            return difficulty == Difficulty.Hard ? 5 : 4;
+        }
+
+        /// <summary>
+        /// Seconds lost to a traffic crash. Hard's clock already burns 35% faster, so its crash
+        /// penalty is trimmed rather than stacked on top of the drain.
+        /// </summary>
+        public static float CrashPenalty(Difficulty difficulty)
+        {
+            switch (difficulty)
+            {
+                case Difficulty.Medium: return 2.2f;
+                case Difficulty.Hard: return 1.8f;
+                default: return 2.5f;
+            }
+        }
+
         public static float Clamp01(float value)
         {
             return MathF.Max(0f, MathF.Min(1f, value));

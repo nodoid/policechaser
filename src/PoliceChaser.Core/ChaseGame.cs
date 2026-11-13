@@ -473,6 +473,10 @@ namespace PoliceChaser
             StartMission();
         }
 
+        private const float CrashFlashTime = 0.7f;
+        private float _crashTimer;
+        private int _crashSide = 1;
+
         private void StartMission()
         {
             _mission = Mission.All[_campaignIndex];
@@ -480,6 +484,7 @@ namespace PoliceChaser
             _countdown = 3.35f;
             _lastCountdownSecond = -1;
             _shake = 0f;
+            _crashTimer = 0f;
             _skyOffset = 0f;
             _radioText = "SUSPECT SPOTTED - GO!";
             _radioTimer = 2.4f;
@@ -502,6 +507,7 @@ namespace PoliceChaser
             }
 
             _shake = MathF.Max(0f, _shake - dt * 3.5f);
+            _crashTimer = MathF.Max(0f, _crashTimer - dt);
 
             if (_countdown > 0f)
             {
@@ -593,8 +599,14 @@ namespace PoliceChaser
                         break;
                     case RaceEventType.TrafficHit:
                         _shake = 1f;
+                        _crashTimer = CrashFlashTime;
+                        _crashSide = _race.PlayerX >= 0f ? -1 : 1;
                         _audio.Play(_audio.Crash, 0.9f);
                         SetRadio(evt.Value > 0 ? "CRASH! HULL " + evt.Value : "CAR WRECKED");
+                        break;
+                    case RaceEventType.Repaired:
+                        _audio.Play(_audio.Checkpoint, 0.55f);
+                        SetRadio("HULL PATCHED UP - " + evt.Value);
                         break;
                     case RaceEventType.Checkpoint:
                         _audio.Play(_audio.Checkpoint, 0.7f);
@@ -906,6 +918,15 @@ namespace PoliceChaser
                     _missionCursor = 6;
                     _mission = Mission.All[6];
                     SetScreen(GameScreen.Briefing);
+                    break;
+                case "crash":
+                    _PointerSeen = true;
+                    _missionCursor = 0;
+                    _difficulty = Difficulty.Beginner;
+                    StartCampaign();
+                    _countdown = 0f;
+                    _crashTimer = CrashFlashTime;
+                    _crashSide = 1;
                     break;
                 case "pads":
                     _PointerSeen = true;
@@ -1750,8 +1771,9 @@ namespace PoliceChaser
 
             Panel(16, 22, 288, 172, new Color(8, 10, 26, 235), new Color(250, 210, 80));
 
-            TextCentered("STAGE " + (_campaignIndex + 1) + "/" + Mission.All.Count + " - PURSUIT BRIEFING",
-                160, 28, new Color(250, 210, 80));
+            Text("STAGE " + (_campaignIndex + 1) + "/" + Mission.All.Count + " - PURSUIT BRIEFING",
+                26, 28, new Color(250, 210, 80));
+            DrawSuspectPhoto(216, 88, 80, 62);
             TextCentered(_mission.Title, 160, 42, Color.White, 2);
 
             TextWrapped(_mission.Tagline, 26, 64, 46, new Color(180, 195, 230));
@@ -1762,7 +1784,7 @@ namespace PoliceChaser
             Text(_mission.SuspectCrime, 86, 106, new Color(200, 210, 235));
 
             Text("TARGET:", 26, 122, new Color(140, 150, 185));
-            Text("RAM " + _mission.RequiredRams + " TIMES TO STOP THE CAR", 86, 122, new Color(200, 210, 235));
+            Text("RAM " + _mission.RequiredRams + " TIMES TO STOP", 86, 122, new Color(200, 210, 235));
 
             Text("SKILL:", 26, 138, new Color(140, 150, 185));
             Text(DifficultyRules.Name(_difficulty), 86, 138, new Color(250, 210, 80));
@@ -1774,7 +1796,7 @@ namespace PoliceChaser
             if (_mission.SuspectArmed)
             {
                 Text("WARNING:", 26, 170, new Color(255, 120, 120));
-                Text("SUSPECT IS ARMED - HULL AT RISK", 86, 170, new Color(255, 160, 160));
+                Text("ARMED - HULL AT RISK", 86, 170, new Color(255, 160, 160));
             }
 
             if (Blink(2f))
@@ -1785,6 +1807,31 @@ namespace PoliceChaser
             Rect(0, 200, VirtualWidth, 24, new Color(10, 12, 24));
             TextCentered("STEER WITH LEFT/RIGHT - BRAKE DOWN - TURBO FIRE", 160, 206, new Color(140, 160, 200));
             TextCentered("MOBILE: ON-SCREEN PADS", 160, 217, new Color(100, 110, 140));
+        }
+
+        /// <summary>A framed file photo of the suspect's car, echoing the original's stage card.</summary>
+        private void DrawSuspectPhoto(int x, int y, int w, int h)
+        {
+            Rect(x, y, w, h, new Color(12, 14, 26));
+
+            Texture2D car = _art.SuspectCars[Math.Clamp(_mission.SuspectColor, 0, _art.SuspectCars.Length - 1)];
+            int carW = w - 12;
+            int carH = car.Height * carW / car.Width;
+            if (carH > h - 12)
+            {
+                carH = h - 12;
+                carW = car.Width * carH / car.Height;
+            }
+
+            _spriteBatch.Draw(car,
+                new Rectangle((x + (w - carW) / 2) * S, (y + (h - carH) / 2) * S, carW * S, carH * S),
+                Color.White);
+
+            Rect(x, y, w, 1, Color.White);
+            Rect(x, y + h - 1, w, 1, Color.White);
+            Rect(x, y, 1, h, Color.White);
+            Rect(x + w - 1, y, 1, h, Color.White);
+            TextCentered("SUSPECT CAR", x + w / 2, y + h + 3, new Color(140, 160, 195));
         }
 
         // ------------------------------------------------------------------ race
@@ -1841,17 +1888,30 @@ namespace PoliceChaser
         private void DrawPlayerCar(float shakeX, float shakeY)
         {
             int baseY = 164 * S;
+            float crash = Math.Clamp(_crashTimer / CrashFlashTime, 0f, 1f);
             int lean = (int)(_input.Steer * 4f) * S;
             int bump = (int)(MathF.Sin(_time * 18f) * 1.2f * Math.Clamp(_race.SpeedRatio, 0f, 1f) * S);
+
+            // A shunt kicks the car sideways and makes it shudder for a moment.
+            int wobble = (int)(MathF.Sin(_time * 46f) * 11f * crash * _crashSide) * S;
+            int jolt = (int)(MathF.Sin(_time * 31f) * 3f * crash) * S;
 
             Texture2D car = _input.Steer < -0.2f ? _art.PlayerCarLeft
                           : _input.Steer > 0.2f ? _art.PlayerCarRight
                           : _art.PlayerCar;
-            int x = 160 * S - car.Width / 2 + lean + (int)(shakeX * 0.6f);
-            int y = baseY + bump + (int)(shakeY * 0.6f);
+            int x = 160 * S - car.Width / 2 + lean + wobble + (int)(shakeX * 0.6f);
+            int y = baseY + bump + jolt + (int)(shakeY * 0.6f);
+            Color tint = crash > 0f && MathF.Sin(_time * 60f) > 0f
+                ? new Color(255, 190, 165)
+                : Color.White;
 
             _spriteBatch.Draw(_art.Shadow, new Rectangle(x + 4 * S, y + 34 * S, 56 * S, 12 * S), Color.White);
-            _spriteBatch.Draw(car, new Rectangle(x, y, car.Width, car.Height), Color.White);
+            _spriteBatch.Draw(car, new Rectangle(x, y, car.Width, car.Height), tint);
+
+            if (crash > 0f)
+            {
+                DrawCrashSparks(160 * S + wobble, y + 12 * S, crash);
+            }
 
             // Brake lights glow.
             if (_input.Brake)
@@ -1859,6 +1919,23 @@ namespace PoliceChaser
                 _spriteBatch.Draw(_white, new Rectangle(x + 8 * S, y + 18 * S, 10 * S, 4 * S), new Color(255, 90, 90, 180));
                 _spriteBatch.Draw(_white, new Rectangle(x + 46 * S, y + 18 * S, 10 * S, 4 * S), new Color(255, 90, 90, 180));
             }
+        }
+
+        private void DrawCrashSparks(int centreX, int centreY, float life)
+        {
+            for (int i = 0; i < 14; i++)
+            {
+                float angle = i * 0.45f + _time * 2.2f;
+                float distance = (1f - life) * 70f + 10f;
+                int x = centreX + (int)(MathF.Cos(angle) * distance) * S;
+                int y = centreY + (int)(MathF.Sin(angle) * distance * 0.55f) * S;
+                int size = Math.Max(1, (int)(4f * life)) * S;
+                int alpha = (int)(230f * life);
+                _spriteBatch.Draw(_white, new Rectangle(x, y, size, size),
+                    new Color(255, 220, 130, alpha));
+            }
+
+            Rect(0, 0, VirtualWidth, 2, new Color(255, 90, 70, (int)(120f * life)));
         }
 
         private void BuildWorldSprites()
