@@ -74,6 +74,7 @@ namespace PoliceChaser.Game
         private float _ramCooldown;
         private float _escapeWarnTimer;
         private float _gunTimer;
+        private int _shotsOnHull;
         private float _rivalPhase;
         private float _shake;
         private float _skid;
@@ -337,10 +338,19 @@ namespace PoliceChaser.Game
                     float hitChance = 0.58f - MathF.Min(0.34f, MathF.Abs(PlayerX - RivalX) * 0.35f);
                     if (_random.NextDouble() < hitChance)
                     {
-                        PlayerHealth = Math.Max(0, PlayerHealth - 1);
+                        // Most rounds chew the bodywork and cost speed and clock; only every
+                        // third one punches through a plate. Single-shot damage wrecked the
+                        // armed Hard missions, where fire arrives every 1.5 seconds, before
+                        // the player could ever line up a ram.
                         Speed *= 0.86f;
                         TimeRemaining = MathF.Max(0.1f, TimeRemaining - 1.2f);
                         _shake = 1f;
+                        _shotsOnHull++;
+                        if (_shotsOnHull % 3 == 0)
+                        {
+                            PlayerHealth = Math.Max(0, PlayerHealth - 1);
+                        }
+
                         Events.Add(new RaceEvent { Type = RaceEventType.PlayerHit, Value = PlayerHealth });
 
                         if (PlayerHealth <= 0)

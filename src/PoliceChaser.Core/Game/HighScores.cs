@@ -14,10 +14,33 @@ namespace PoliceChaser.Game
         public string MissionId { get; set; } = "";
         public string MissionTitle { get; set; } = "";
         public int Rams { get; set; }
+
+        /// <summary>1-based stage the run ended on, 0 for entries saved before this existed.</summary>
+        public int Stage { get; set; }
+
+        /// <summary>How the run ended: "RAMMED A CAR", "SHOT BY THE SUSPECT", etc.</summary>
+        public string Outcome { get; set; } = "";
+
         public long Ticks { get; set; }
 
         [JsonIgnore]
         public string DifficultyLabel => DifficultyRules.Name(Difficulty);
+
+        /// <summary>"STAGE 7 - RAMMED A CAR", or empty for a legacy entry with no stage.</summary>
+        [JsonIgnore]
+        public string RunSummary
+        {
+            get
+            {
+                if (Stage <= 0)
+                {
+                    return Outcome ?? "";
+                }
+
+                return "STAGE " + Stage + " - " +
+                    (string.IsNullOrEmpty(Outcome) ? "PURSUIT FAILED" : Outcome);
+            }
+        }
 
         [JsonIgnore]
         public string MissionLabel =>

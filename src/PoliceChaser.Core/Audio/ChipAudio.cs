@@ -55,6 +55,7 @@ namespace PoliceChaser.Audio
         public SoundEffect Crash { get; }
         public SoundEffect Screech { get; }
         public SoundEffect Squelch { get; }
+        public SoundEffect Gunshot { get; }
         public SoundEffect Ram { get; }
         public SoundEffect Beep { get; }
         public SoundEffect Select { get; }
@@ -71,7 +72,28 @@ namespace PoliceChaser.Audio
         public const string TrackHighScore = "hiscore";
         public const string TrackBusted = "busted";
 
-        public float MusicVolume { get; set; } = 0.55f;
+        /// <summary>
+        /// Peak-linear gains for every sound that can overlap. A traffic hit layers crash,
+        /// screech and squelch, so those three are budgeted to stay under 1.0 together while
+        /// the music, engine and siren sit underneath the effects.
+        /// </summary>
+        public static class Mix
+        {
+            public const float Music = 0.45f;
+            public const float EngineMin = 0.12f;
+            public const float EngineMax = 0.28f;
+            public const float Siren = 0.12f;
+            public const float Crash = 0.50f;
+            public const float Screech = 0.28f;
+            public const float Squelch = 0.16f;
+            public const float Gunshot = 0.45f;
+            public const float Ram = 0.60f;
+            public const float Skid = 0.40f;
+            public const float Checkpoint = 0.40f;
+            public const float Warning = 0.40f;
+        }
+
+        public float MusicVolume { get; set; } = Mix.Music;
 
         public ChipAudio()
         {
@@ -79,9 +101,10 @@ namespace PoliceChaser.Audio
             Siren = Make(SirenLoop(), 0.28f);
             SirenShort = Make(SirenLoop(), 0.5f);
             Skid = Make(SkidSound(), 0.7f);
-            Crash = Make(CrashSound(), 0.9f);
-            Screech = Make(ScreechSound(), 0.7f);
-            Squelch = Make(SquelchSound(), 0.4f);
+            Crash = Make(CrashSound(), 1f);
+            Screech = Make(ScreechSound(), 1f);
+            Squelch = Make(SquelchSound(), 1f);
+            Gunshot = Make(GunshotSound(), 1f);
             Ram = Make(RamSound(), 0.95f);
             Beep = Make(SimpleTone(0.07f, 940f, 940f, Waveform.Pulse, 0.35f, 0.5f), 0.55f);
             Select = Make(SimpleTone(0.05f, 1400f, 1600f, Waveform.Pulse, 0.2f, 0.5f), 0.5f);
@@ -130,14 +153,15 @@ namespace PoliceChaser.Audio
         {
             if (_engineInstance != null)
             {
-                float target = paused ? 0f : 0.16f + 0.34f * Math.Min(1f, speedRatio);
+                float target = paused ? 0f
+                    : Mix.EngineMin + (Mix.EngineMax - Mix.EngineMin) * Math.Min(1f, speedRatio);
                 _engineInstance.Volume = Lerp(_engineInstance.Volume, target, 0.15f);
                 _engineInstance.Pitch = Math.Clamp(-0.45f + speedRatio * 0.7f + (turbo ? 0.12f : 0f), -0.6f, 0.85f);
             }
 
             if (_sirenInstance != null)
             {
-                float target = paused ? 0f : 0.16f;
+                float target = paused ? 0f : Mix.Siren;
                 _sirenInstance.Volume = Lerp(_sirenInstance.Volume, target, 0.05f);
             }
         }
@@ -844,6 +868,24 @@ namespace PoliceChaser.Audio
             return buffer;
         }
 
+        private static float[] GunshotSound()
+        {
+            int samples = (int)(SampleRate * 0.22);
+            var buffer = new float[samples];
+            uint noise = 0x1BADB002;
+
+            for (int i = 0; i < samples; i++)
+            {
+                float t = i / (float)samples;
+                float n = NextNoise(ref noise);
+                float crack = i < 40 ? (1f - i / 40f) * (n > 0 ? 0.9f : -0.9f) : 0f;
+                float thump = (float)Math.Sin(i / (double)SampleRate * 2 * Math.PI * 95) * 0.5f;
+                buffer[i] = (n * 0.6f + thump + crack) * MathF.Exp(-t * 10f);
+            }
+
+            return buffer;
+        }
+
         private static float[] RamSound()
         {
             int samples = (int)(SampleRate * 0.4);
@@ -956,6 +998,7 @@ namespace PoliceChaser.Audio
         {
             try
             {
+                Normalize(buffer);
                 byte[] pcm = FloatToPcm(buffer, volume);
                 var effect = new SoundEffect(pcm, SampleRate, AudioChannels.Mono);
                 _owned.Add(effect);
@@ -965,6 +1008,27 @@ namespace PoliceChaser.Audio
             {
                 // No audio device (headless CI, a VM without sound): the game stays silent.
                 return null;
+            }
+        }
+
+        /// <summary>Scales an effect so its loudest peak is 1.0 before the mix gain is applied.</summary>
+        private static void Normalize(float[] buffer)
+        {
+            float peak = 0f;
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                peak = MathF.Max(peak, MathF.Abs(buffer[i]));
+            }
+
+            if (peak <= 0.0001f)
+            {
+                return;
+            }
+
+            float scale = 1f / peak;
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                buffer[i] *= scale;
             }
         }
 

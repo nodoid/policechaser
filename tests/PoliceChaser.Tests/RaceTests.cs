@@ -369,6 +369,50 @@ namespace PoliceChaser.Tests
         }
 
         [Fact]
+        public void Armed_fire_costs_a_plate_every_third_hit()
+        {
+            Race race = new Race(Mission.ById("steelworks"), Difficulty.Beginner, 99);
+            int hits = 0;
+            int plates = 0;
+            int hull = race.PlayerHealth;
+
+            for (int i = 0; i < 60 * 90 && !race.Finished; i++)
+            {
+                race.Traffic.Clear();
+
+                // Sit in gun range without ramming: the pursuit would otherwise be over
+                // before the suspect has fired often enough to observe the cadence.
+                float gap = race.Gap;
+                race.Update(1f / 60f, new RaceInput
+                {
+                    Accelerate = gap > 2600f,
+                    Brake = gap < 1800f,
+                    Turbo = gap > 5500f && race.Turbo > 0.05f,
+                    Steer = Math.Clamp((race.RivalX - race.PlayerX) * 2f, -1f, 1f)
+                });
+
+                foreach (RaceEvent evt in race.Events)
+                {
+                    if (evt.Type == RaceEventType.PlayerHit)
+                    {
+                        hits++;
+                    }
+                }
+
+                if (race.PlayerHealth < hull)
+                {
+                    plates++;
+                }
+
+                hull = race.PlayerHealth;
+            }
+
+            Assert.True(hits >= 4, "expected sustained fire, got " + hits + " hits");
+            Assert.True(plates <= hits / 3 + 1,
+                plates + " plates from " + hits + " hits (expected at most every third round)");
+        }
+
+        [Fact]
         public void Checkpoints_patch_one_hull_plate()
         {
             Race race = NewRace();

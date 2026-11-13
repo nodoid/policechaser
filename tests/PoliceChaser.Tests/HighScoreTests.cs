@@ -6,7 +6,8 @@ namespace PoliceChaser.Tests
 {
     public class HighScoreTests
     {
-        private static ScoreEntry Entry(string name, int score, Difficulty difficulty = Difficulty.Beginner)
+        private static ScoreEntry Entry(string name, int score, Difficulty difficulty = Difficulty.Beginner,
+            int stage = 0, string outcome = "")
         {
             return new ScoreEntry
             {
@@ -15,6 +16,8 @@ namespace PoliceChaser.Tests
                 Difficulty = difficulty,
                 MissionId = "harbour",
                 MissionTitle = "HARBOUR PURSUIT",
+                Stage = stage,
+                Outcome = outcome,
                 Ticks = DateTime.UtcNow.Ticks
             };
         }
@@ -64,8 +67,8 @@ namespace PoliceChaser.Tests
         {
             var file = new MemoryHighScoreFile();
             var first = new HighScoreStore(file);
-            first.Submit(Entry("PC1", 4321, Difficulty.Hard));
-            first.Submit(Entry("PC2", 8765, Difficulty.Medium));
+            first.Submit(Entry("PC1", 4321, Difficulty.Hard, 7, "RAMMED A CAR"));
+            first.Submit(Entry("PC2", 8765, Difficulty.Medium, 4, "RAN OUT OF TIME"));
 
             Assert.False(string.IsNullOrWhiteSpace(file.Contents));
 
@@ -75,6 +78,9 @@ namespace PoliceChaser.Tests
             Assert.Equal(8765, second.BestScore());
             Assert.Equal("PC1", second.Table.Entries[1].Name);
             Assert.Equal(Difficulty.Hard, second.Table.Entries[1].Difficulty);
+            Assert.Equal(7, second.Table.Entries[1].Stage);
+            Assert.Equal("RAMMED A CAR", second.Table.Entries[1].Outcome);
+            Assert.Equal("STAGE 7 - RAMMED A CAR", second.Table.Entries[1].RunSummary);
         }
 
         [Fact]

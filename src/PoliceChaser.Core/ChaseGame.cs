@@ -594,49 +594,51 @@ namespace PoliceChaser
                 {
                     case RaceEventType.Ram:
                         _shake = 1f;
-                        _audio.Play(_audio.Ram, 0.9f);
+                        _audio.Play(_audio.Ram, ChipAudio.Mix.Ram);
                         SetRadio("RAMMED HIM! +" + evt.Value);
                         break;
                     case RaceEventType.TrafficHit:
                         _shake = 1f;
                         _crashTimer = CrashFlashTime;
                         _crashSide = _race.PlayerX >= 0f ? -1 : 1;
-                        _audio.Play(_audio.Crash, 1f);
-                        _audio.Play(_audio.Screech, 0.7f);
-                        _audio.Play(_audio.Squelch, 0.35f);
+                        _audio.Play(_audio.Crash, ChipAudio.Mix.Crash);
+                        _audio.Play(_audio.Screech, ChipAudio.Mix.Screech);
+                        _audio.Play(_audio.Squelch, ChipAudio.Mix.Squelch);
                         SetRadio(evt.Value > 0 ? "CRASH! HULL " + evt.Value : "CAR WRECKED");
                         break;
                     case RaceEventType.Repaired:
-                        _audio.Play(_audio.Checkpoint, 0.55f);
+                        _audio.Play(_audio.Checkpoint, ChipAudio.Mix.Checkpoint);
                         SetRadio("HULL PATCHED UP - " + evt.Value);
                         break;
                     case RaceEventType.Checkpoint:
-                        _audio.Play(_audio.Checkpoint, 0.7f);
+                        _audio.Play(_audio.Checkpoint, ChipAudio.Mix.Checkpoint);
                         SetRadio("CHECKPOINT - TIME EXTENDED");
                         break;
                     case RaceEventType.TurboEmpty:
                         SetRadio("TURBO EMPTY");
                         break;
                     case RaceEventType.OffRoad:
-                        _audio.Play(_audio.Skid, 0.55f);
+                        _audio.Play(_audio.Skid, ChipAudio.Mix.Skid);
                         break;
                     case RaceEventType.SuspectEscaping:
-                        _audio.Play(_audio.Wrong, 0.6f);
+                        _audio.Play(_audio.Wrong, ChipAudio.Mix.Warning);
                         SetRadio("SUSPECT ESCAPING!");
                         break;
                     case RaceEventType.Gunfire:
                         _shake = MathF.Max(_shake, 0.5f);
-                        _audio.Play(_audio.Crash, 0.35f);
+                        _audio.Play(_audio.Gunshot, ChipAudio.Mix.Gunshot);
                         SetRadio("SUSPECT IS SHOOTING!");
                         break;
                     case RaceEventType.PlayerHit:
                         _shake = 1f;
-                        _audio.Play(_audio.Crash, 0.8f);
+                        _audio.Play(_audio.Gunshot, ChipAudio.Mix.Gunshot);
+                        _audio.Play(_audio.Squelch, ChipAudio.Mix.Squelch);
                         SetRadio("TAKING FIRE! HULL " + evt.Value);
                         break;
                     case RaceEventType.Wrecked:
                         _shake = 1f;
-                        _audio.Play(_audio.Crash, 1f);
+                        _audio.Play(_audio.Crash, ChipAudio.Mix.Crash);
+                        _audio.Play(_audio.Screech, ChipAudio.Mix.Screech);
                         SetRadio("CAR WRECKED");
                         break;
                     case RaceEventType.NearMiss:
@@ -743,6 +745,8 @@ namespace PoliceChaser
                 Difficulty = _difficulty,
                 MissionId = mission?.Id ?? "",
                 MissionTitle = mission?.Title ?? "",
+                Stage = (mission?.Index ?? 0) + 1,
+                Outcome = RunOutcomeText(),
                 Rams = _race?.Rams ?? 0,
                 Ticks = DateTime.UtcNow.Ticks
             };
@@ -763,6 +767,29 @@ namespace PoliceChaser
                 _scoreSubmitted = true;
                 SetScreen(GameScreen.HighScores);
             }
+        }
+
+        /// <summary>How the run ended, in the words the high-score card uses.</summary>
+        private string RunOutcomeText()
+        {
+            if (_screen == GameScreen.CampaignComplete)
+            {
+                return "ALL STAGES CLEARED";
+            }
+
+            if (_race?.Wrecked == true)
+            {
+                return _race.WreckedBy == WreckCause.Gunfire
+                    ? "SHOT BY THE SUSPECT"
+                    : "RAMMED A CAR";
+            }
+
+            if (_race?.TimedOut == true)
+            {
+                return "RAN OUT OF TIME";
+            }
+
+            return "SUSPECT ESCAPED";
         }
 
         private char[] _letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!-".ToCharArray();
@@ -991,11 +1018,21 @@ namespace PoliceChaser
                         Score = 9120,
                         Difficulty = Difficulty.Hard,
                         MissionId = "arctic",
-                        MissionTitle = "FROSTLINE"
+                        MissionTitle = "FROSTLINE",
+                        Stage = 6,
+                        Outcome = "SHOT BY THE SUSPECT"
                     };
                     SetScreen(GameScreen.NameEntry);
                     break;
                 case "scores":
+                    // A scratch table for the screenshot: never touch the player's real scores.
+                    _scores = new HighScoreStore(new MemoryHighScoreFile());
+                    _scores.Submit(new ScoreEntry { Name = "PC1", Score = 24800, Difficulty = Difficulty.Hard, MissionId = "canyon", MissionTitle = "RED CANYON", Stage = 9, Outcome = "ALL STAGES CLEARED", Ticks = 1 });
+                    _scores.Submit(new ScoreEntry { Name = "PC2", Score = 18420, Difficulty = Difficulty.Medium, MissionId = "arctic", MissionTitle = "FROSTLINE", Stage = 6, Outcome = "SHOT BY THE SUSPECT", Ticks = 2 });
+                    _scores.Submit(new ScoreEntry { Name = "PC3", Score = 15310, Difficulty = Difficulty.Beginner, MissionId = "neon", MissionTitle = "NEON GRID", Stage = 4, Outcome = "RAMMED A CAR", Ticks = 3 });
+                    _scores.Submit(new ScoreEntry { Name = "PC4", Score = 12040, Difficulty = Difficulty.Hard, MissionId = "harbour", MissionTitle = "HARBOUR PURSUIT", Stage = 1, Outcome = "RAN OUT OF TIME", Ticks = 4 });
+                    _scores.Submit(new ScoreEntry { Name = "PC5", Score = 9120, Difficulty = Difficulty.Medium, MissionId = "alpine", MissionTitle = "ALPINE PASS", Stage = 3, Outcome = "RAMMED A CAR", Ticks = 5 });
+
                     _highlightIndex = 3;
                     SetScreen(GameScreen.HighScores);
                     break;
@@ -2326,6 +2363,11 @@ namespace PoliceChaser
             TextShadow("NEW HIGH SCORE", 160, 48, new Color(250, 220, 120), 2);
             TextCentered("SCORE " + _pendingEntry.Score.ToString("D6"), 160, 68, Color.White);
 
+            string summary = _pendingEntry.RunSummary;
+            Color summaryColor = _pendingEntry.Outcome == "ALL STAGES CLEARED"
+                ? new Color(140, 250, 160)
+                : new Color(255, 165, 165);
+
             bool touchUi = MobilePlatform || _PointerSeen;
 
             if (touchUi)
@@ -2348,10 +2390,16 @@ namespace PoliceChaser
                 DrawKey(NameDownButton, "DOWN");
                 DrawKey(NameOkButton, "OK");
                 TextCentered("TAP A BOX - UP/DOWN CHANGES IT", 160, 153, new Color(150, 170, 210));
-                TextCentered("OK ENTERS THE NAME", 160, 164, new Color(150, 170, 210));
+                TextCentered(string.IsNullOrEmpty(summary) ? "OK ENTERS THE NAME" : summary,
+                    160, 164, summaryColor);
             }
             else
             {
+                if (!string.IsNullOrEmpty(summary))
+                {
+                    TextCentered(summary, 160, 82, summaryColor);
+                }
+
                 TextCentered("UP/DOWN LETTER - LEFT/RIGHT MOVE", 160, 146, new Color(150, 170, 210));
 
                 if (Blink(2f))
@@ -2409,7 +2457,12 @@ namespace PoliceChaser
                 Text(ShortMission(entry.MissionId), 238, y, new Color(150, 160, 190));
             }
 
-            TextCentered("TOP 10 - SCORE IS WEIGHTED BY SKILL", 160, 200, new Color(140, 150, 185));
+            ScoreEntry highlighted = _highlightIndex >= 0 && _highlightIndex < table.Entries.Count
+                ? table.Entries[_highlightIndex]
+                : null;
+            bool hasSummary = highlighted != null && !string.IsNullOrEmpty(highlighted.RunSummary);
+            TextCentered(hasSummary ? highlighted.RunSummary : "TOP 10 - SCORE IS WEIGHTED BY SKILL",
+                160, 200, hasSummary ? new Color(250, 200, 200) : new Color(140, 150, 185));
             if (Blink(2f))
             {
                 TextCentered(ConfirmPrompt + " TO RETURN", 160, 218, Color.White);
