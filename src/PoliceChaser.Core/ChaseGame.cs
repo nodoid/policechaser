@@ -601,7 +601,9 @@ namespace PoliceChaser
                         _shake = 1f;
                         _crashTimer = CrashFlashTime;
                         _crashSide = _race.PlayerX >= 0f ? -1 : 1;
-                        _audio.Play(_audio.Crash, 0.9f);
+                        _audio.Play(_audio.Crash, 1f);
+                        _audio.Play(_audio.Screech, 0.7f);
+                        _audio.Play(_audio.Squelch, 0.35f);
                         SetRadio(evt.Value > 0 ? "CRASH! HULL " + evt.Value : "CAR WRECKED");
                         break;
                     case RaceEventType.Repaired:
@@ -918,6 +920,34 @@ namespace PoliceChaser
                     _missionCursor = 6;
                     _mission = Mission.All[6];
                     SetScreen(GameScreen.Briefing);
+                    break;
+                case "wreck":
+                    _missionCursor = 0;
+                    StartCampaign();
+                    _countdown = 0f;
+                    for (int i = 0; i < 60 * 150 && !_race.Finished; i++)
+                    {
+                        TrafficCar nearest = null;
+                        float best = float.MaxValue;
+                        foreach (TrafficCar car in _race.Traffic)
+                        {
+                            float dz = car.Z - _race.PlayerZ;
+                            if (dz > 200f && dz < best)
+                            {
+                                best = dz;
+                                nearest = car;
+                            }
+                        }
+
+                        float steer = nearest != null
+                            ? Math.Clamp((nearest.X - _race.PlayerX) * 3f, -1f, 1f)
+                            : 0f;
+                        _race.Update(1f / 60f,
+                            new RaceInput { Accelerate = true, Turbo = true, Steer = steer });
+                    }
+
+                    _campaignRaw = _race?.RawScore ?? 0;
+                    SetScreen(GameScreen.GameOver);
                     break;
                 case "crash":
                     _PointerSeen = true;
@@ -2231,7 +2261,9 @@ namespace PoliceChaser
             if (_race?.Wrecked == true)
             {
                 Text("CAUSE", 44, 100, new Color(130, 140, 175));
-                Text("YOUR CAR WAS WRECKED", 44, 110, new Color(255, 160, 160));
+                Text(_race.WreckedBy == WreckCause.Gunfire ? "SHOT BY THE SUSPECT" : "RAMMED A CAR",
+                    44, 110, new Color(255, 160, 160));
+                DrawWreckedCar(190, 96, 88, 62);
             }
             else
             {
@@ -2246,14 +2278,42 @@ namespace PoliceChaser
             Text(DifficultyRules.Weight(_difficulty, _campaignRaw).ToString("D6"), 44, 166,
                 new Color(250, 210, 80), 2);
 
-            Text("SKILL " + DifficultyRules.Name(_difficulty), 180, 100, new Color(160, 180, 215));
-            Text("RAMS " + (_race?.Rams ?? 0), 180, 114, new Color(160, 180, 215));
-            Text("CHECKPOINTS " + (_race?.Checkpoints ?? 0), 180, 128, new Color(160, 180, 215));
+            if (_race?.Wrecked != true)
+            {
+                Text("SKILL " + DifficultyRules.Name(_difficulty), 180, 100, new Color(160, 180, 215));
+                Text("RAMS " + (_race?.Rams ?? 0), 180, 114, new Color(160, 180, 215));
+                Text("CHECKPOINTS " + (_race?.Checkpoints ?? 0), 180, 128, new Color(160, 180, 215));
+            }
 
             if (Blink(2f))
             {
                 TextCentered(ConfirmPrompt + " TO SEE THE HIGH SCORES", 160, 190, new Color(210, 225, 250));
             }
+        }
+
+        private void DrawWreckedCar(int x, int y, int w, int h)
+        {
+            Rect(x - 6, y + h - 4, w + 12, 6, new Color(0, 0, 0, 130));
+
+            _spriteBatch.Draw(_art.PlayerCar, new Rectangle(x, y, w, h), new Color(165, 162, 168));
+
+            // Dents in the bodywork.
+            Rect(x + w / 4, y + h / 3, w / 6, 4, new Color(70, 66, 70, 200));
+            Rect(x + w / 2, y + h / 2, w / 7, 3, new Color(70, 66, 70, 200));
+
+            // Smoke curling off the bonnet.
+            for (int i = 0; i < 5; i++)
+            {
+                float t = (_time * 0.55f + i * 0.21f) % 1f;
+                int size = 3 + (int)(t * 7f);
+                int sx = x + w / 2 - 4 + (int)(MathF.Sin(_time * 2.3f + i) * 9f);
+                int sy = y + 6 - (int)(t * 40f);
+                Rect(sx, sy, size, size, new Color(140, 138, 150, (int)(130f * (1f - t))));
+            }
+
+            int flicker = (int)(MathF.Sin(_time * 17f) * 2f);
+            Rect(x + w / 3, y + h / 2 + flicker, 6, 6, new Color(255, 150, 50, 210));
+            Rect(x + w / 3 + 2, y + h / 2 + 1 + flicker, 3, 4, new Color(255, 230, 140, 230));
         }
 
         private void DrawNameEntry()

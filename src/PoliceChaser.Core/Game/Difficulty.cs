@@ -94,8 +94,8 @@ namespace PoliceChaser.Game
         {
             switch (difficulty)
             {
-                case Difficulty.Medium: return 1.35f;
-                case Difficulty.Hard: return 1.8f;
+                case Difficulty.Medium: return 1.15f;
+                case Difficulty.Hard: return 1.25f;
                 default: return 1.0f;
             }
         }
@@ -106,7 +106,7 @@ namespace PoliceChaser.Game
             switch (difficulty)
             {
                 case Difficulty.Medium: return 0.14f;
-                case Difficulty.Hard: return 0.24f;
+                case Difficulty.Hard: return 0.08f;
                 default: return 0.06f;
             }
         }
@@ -139,7 +139,7 @@ namespace PoliceChaser.Game
         /// </summary>
         public static int HullPoints(Difficulty difficulty)
         {
-            return difficulty == Difficulty.Hard ? 5 : 4;
+            return difficulty == Difficulty.Hard ? 6 : 4;
         }
 
         /// <summary>

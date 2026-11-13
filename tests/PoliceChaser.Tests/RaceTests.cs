@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using PoliceChaser.Game;
 using Xunit;
 
@@ -169,8 +170,8 @@ namespace PoliceChaser.Tests
         public void Armed_series_two_suspects_shoot_back()
         {
             Race race = new Race(Mission.ById("steelworks"), Difficulty.Beginner, 1234);
-            Assert.Equal(3, race.PlayerMaxHealth);
-            Assert.Equal(3, race.PlayerHealth);
+            Assert.Equal(4, race.PlayerMaxHealth);
+            Assert.Equal(4, race.PlayerHealth);
 
             bool sawGunfire = false;
             int lowestHull = race.PlayerHealth;
@@ -257,6 +258,116 @@ namespace PoliceChaser.Tests
             Assert.Equal(0, race.PlayerHealth);
         }
 
+        /// <summary>Steer towards a lane and hold it with a stiff controller.</summary>
+        private static float HoldLane(Race race, float lane)
+        {
+            return Math.Clamp((lane - race.PlayerX) * 5f, -1f, 1f);
+        }
+
+        /// <summary>How clear a lane stays over the next three seconds of closing speed.</summary>
+        private static float LaneScore(Race race, float lane)
+        {
+            float score = 100f - MathF.Abs(lane) * 6f;
+            foreach (TrafficCar car in race.Traffic)
+            {
+                float dz = car.Z - race.PlayerZ;
+                if (dz < -500f || dz > 30000f || MathF.Abs(car.X - lane) > 0.42f)
+                {
+                    continue;
+                }
+
+                float closing = MathF.Max(400f, race.Speed - car.Speed);
+                float timeToCollision = dz / closing;
+                if (timeToCollision > 3f)
+                {
+                    continue;
+                }
+
+                score -= 220f * (1f - timeToCollision / 3f);
+            }
+
+            return score;
+        }
+
+        /// <summary>A simple driver: pick the clearest lane, brake for anything left in it.</summary>
+        private static RaceInput Autopilot(Race race)
+        {
+            float lane = 0f;
+            if (race.Gap < 2000f)
+            {
+                lane = race.RivalX;
+            }
+            else
+            {
+                float best = float.MinValue;
+                for (int i = -2; i <= 2; i++)
+                {
+                    float candidate = i * 0.33f;
+                    float score = LaneScore(race, candidate);
+                    if (score > best)
+                    {
+                        best = score;
+                        lane = candidate;
+                    }
+                }
+            }
+
+            return new RaceInput
+            {
+                Accelerate = true,
+                Turbo = race.Turbo > 0.4f && race.Gap > 500f,
+                Steer = Math.Clamp((lane - race.PlayerX) * 4f, -1f, 1f)
+            };
+        }
+
+        [Fact]
+        public void Hard_campaign_is_winnable_by_a_clean_autopilot()
+        {
+            var results = new System.Collections.Generic.List<string>();
+            int wins = 0;
+
+            foreach (Mission mission in Mission.All)
+            {
+                Race race = new Race(mission, Difficulty.Hard, 4242);
+                for (int i = 0; i < 60 * 150 && !race.Finished; i++)
+                {
+                    race.Update(1f / 60f, Autopilot(race));
+                }
+
+                if (race.Busted)
+                {
+                    wins++;
+                }
+
+                results.Add(mission.Title.PadRight(16) +
+                    (race.Busted ? "WIN     " : race.Wrecked ? "WRECKED " : "TIMEOUT ") +
+                    "hull=" + race.PlayerHealth + "/" + race.PlayerMaxHealth +
+                    " rams=" + race.Rams + "/" + race.RivalMaxHealth +
+                    " time=" + race.TimeRemaining.ToString("F1") +
+                    " gap=" + (int)race.Gap + " x=" + race.PlayerX.ToString("F2") +
+                    " offroad=" + race.OffRoad + " spd=" + (int)race.Speed +
+                    " hits=" + race.TrafficHits);
+            }
+
+            File.WriteAllLines("/tmp/hard-campaign.txt", results);
+            Assert.True(wins >= 6, wins + "/9 wins: " + string.Join(" | ", results));
+        }
+
+        [Fact]
+        public void Hard_chase_is_catchable_without_traffic()
+        {
+            Race race = new Race(Mission.ById("harbour"), Difficulty.Hard, 4242);
+            for (int i = 0; i < 60 * 45 && !race.Finished; i++)
+            {
+                race.Traffic.Clear();
+                race.Update(1f / 60f, Autopilot(race));
+            }
+
+            Assert.True(race.Rams > 0 || race.Busted,
+                "gap=" + (int)race.Gap + " speed=" + (int)race.Speed + " time=" + race.TimeRemaining +
+                " rams=" + race.Rams + " timedOut=" + race.TimedOut + " busted=" + race.Busted);
+        }
+
         [Fact]
         public void Checkpoints_patch_one_hull_plate()
         {
@@ -268,13 +379,21 @@ namespace PoliceChaser.Tests
             int damaged = race.PlayerHealth;
             Assert.Equal(race.PlayerMaxHealth - 1, damaged);
 
+            // Hold the outside lane so the test driver does not accidentally bust the suspect
+            // before it can reach the checkpoint.
             for (int i = 0; i < 60 * 60 && race.Checkpoints == 0 && !race.Finished; i++)
             {
                 race.Traffic.Clear();
-                race.Update(1f / 60f, Drive());
+                race.Update(1f / 60f, Drive(HoldLane(race, 0.8f)));
             }
 
-            Assert.Equal(1, race.Checkpoints);
+            Assert.True(race.Checkpoints == 1,
+                "checkpoints=" + race.Checkpoints + " z=" + race.PlayerZ + " spacing=" +
+                Race.CheckpointSpacing + " speed=" + race.Speed + " x=" + race.PlayerX +
+                " offroad=" + race.OffRoad + " time=" + race.TimeRemaining +
+                " finished=" + race.Finished + " timedOut=" + race.TimedOut +
+                " busted=" + race.Busted + " wrecked=" + race.Wrecked +
+                " hull=" + race.PlayerHealth + " hits=" + race.TrafficHits);
             Assert.Equal(damaged + 1, race.PlayerHealth);
         }
 

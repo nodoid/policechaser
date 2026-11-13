@@ -36,6 +36,13 @@ namespace PoliceChaser.Game
         public int Value;
     }
 
+    public enum WreckCause
+    {
+        None,
+        Traffic,
+        Gunfire
+    }
+
     public sealed class TrafficCar
     {
         public float Z;
@@ -58,7 +65,9 @@ namespace PoliceChaser.Game
         public const float OffRoadLimit = 1.03f;
         public const float RamRange = 950f;
         public const float RamLateral = 0.44f;
-        public const float CheckpointSpacing = 26000f;
+        // Roughly 17 seconds at top speed: often enough to patch a plate, rare enough that the
+        // clock and the repairs still matter.
+        public const float CheckpointSpacing = 200000f;
 
         private readonly Random _random;
         private float _spawnTimer;
@@ -94,16 +103,16 @@ namespace PoliceChaser.Game
         public int Score => DifficultyRules.Weight(Difficulty, RawScore);
 
         /// <summary>
-        /// Hull points. Traffic is the main danger in Series I; armed Series II suspects also
-        /// shoot, so they get one point less to compensate.
+        /// Hull points. Traffic is the main danger; armed Series II suspects add gunfire on top,
+        /// so every mission carries the full skill-level armour.
         /// </summary>
-        public int PlayerMaxHealth =>
-            Math.Max(1, DifficultyRules.HullPoints(Difficulty) - (Mission.SuspectArmed ? 1 : 0));
+        public int PlayerMaxHealth => DifficultyRules.HullPoints(Difficulty);
         public int PlayerHealth { get; private set; }
 
         public bool Busted { get; private set; }
         public bool TimedOut { get; private set; }
         public bool Wrecked { get; private set; }
+        public WreckCause WreckedBy { get; private set; }
         public bool Finished => Busted || TimedOut || Wrecked;
 
         public float Shake => _shake;
@@ -130,7 +139,7 @@ namespace PoliceChaser.Game
 
             float suspectScale = DifficultyRules.SuspectSpeedScale(difficulty);
             RivalSpeed = mission.SuspectBaseSpeed * suspectScale;
-            RivalZ = mission.SuspectBaseSpeed * 4.2f;
+            RivalZ = mission.SuspectBaseSpeed * 1.8f;
             RivalX = 0f;
             PlayerZ = 0f;
             PlayerX = 0f;
@@ -268,7 +277,9 @@ namespace PoliceChaser.Game
             float modulate = 1f + 0.045f * MathF.Sin(_rivalPhase) + 0.02f * MathF.Sin(_rivalPhase * 2.7f);
             _rivalPhase += dt * 1.6f;
 
-            RivalSpeed = baseSuspect * closing * modulate * (1f + escape);
+            // The gap must always be closable on turbo, otherwise a skill level is unwinnable
+            // no matter how well it is driven.
+            RivalSpeed = MathF.Min(baseSuspect * closing * modulate * (1f + escape), MaxSpeed * 0.95f);
             RivalZ += RivalSpeed * dt;
 
             float suspectGap = RivalZ - PlayerZ;
@@ -334,6 +345,7 @@ namespace PoliceChaser.Game
 
                         if (PlayerHealth <= 0)
                         {
+                            WreckedBy = WreckCause.Gunfire;
                             Wrecked = true;
                             Events.Add(new RaceEvent { Type = RaceEventType.Wrecked });
                             return;
@@ -408,7 +420,8 @@ namespace PoliceChaser.Game
                 float dx = car.X - PlayerX;
                 bool crossed = gapBefore > 0f && dz <= 0f;
 
-                if ((MathF.Abs(dz) < 430f || crossed) && MathF.Abs(dx) < 0.36f)
+                // Half-width of the combined car footprint; wider than this is a near miss, not a hit.
+                if ((MathF.Abs(dz) < 430f || crossed) && MathF.Abs(dx) < 0.24f)
                 {
                     Speed *= 0.35f;
                     TimeRemaining = MathF.Max(0.1f,
@@ -421,6 +434,7 @@ namespace PoliceChaser.Game
 
                     if (PlayerHealth <= 0)
                     {
+                        WreckedBy = WreckCause.Traffic;
                         Wrecked = true;
                         Events.Add(new RaceEvent { Type = RaceEventType.Wrecked });
                         return;

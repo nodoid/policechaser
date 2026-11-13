@@ -53,6 +53,8 @@ namespace PoliceChaser.Audio
         public SoundEffect Siren { get; }
         public SoundEffect Skid { get; }
         public SoundEffect Crash { get; }
+        public SoundEffect Screech { get; }
+        public SoundEffect Squelch { get; }
         public SoundEffect Ram { get; }
         public SoundEffect Beep { get; }
         public SoundEffect Select { get; }
@@ -78,6 +80,8 @@ namespace PoliceChaser.Audio
             SirenShort = Make(SirenLoop(), 0.5f);
             Skid = Make(SkidSound(), 0.7f);
             Crash = Make(CrashSound(), 0.9f);
+            Screech = Make(ScreechSound(), 0.7f);
+            Squelch = Make(SquelchSound(), 0.4f);
             Ram = Make(RamSound(), 0.95f);
             Beep = Make(SimpleTone(0.07f, 940f, 940f, Waveform.Pulse, 0.35f, 0.5f), 0.55f);
             Select = Make(SimpleTone(0.05f, 1400f, 1600f, Waveform.Pulse, 0.2f, 0.5f), 0.5f);
@@ -795,6 +799,46 @@ namespace PoliceChaser.Audio
                 float n = NextNoise(ref noise);
                 float low = (float)Math.Sin(i / (double)SampleRate * 2 * Math.PI * 90) * 0.6f;
                 buffer[i] = (n * 0.9f + low) * MathF.Exp(-t * 7f);
+            }
+
+            return buffer;
+        }
+
+        private static float[] ScreechSound()
+        {
+            int samples = (int)(SampleRate * 0.5);
+            var buffer = new float[samples];
+            uint noise = 0x0BADF00D;
+            float filtered = 0f;
+            double phase = 0;
+
+            for (int i = 0; i < samples; i++)
+            {
+                float t = i / (float)samples;
+                float n = NextNoise(ref noise);
+                filtered = filtered * 0.6f + n * 0.4f;
+                double freq = 2100 - 900 * t;
+                phase += freq / SampleRate;
+                float squeal = (float)Math.Sin(phase) * 0.35f;
+                float env = MathF.Min(1f, t * 18f) * (1f - t) * (1f - t);
+                buffer[i] = (filtered * 1.3f + squeal) * env;
+            }
+
+            return buffer;
+        }
+
+        private static float[] SquelchSound()
+        {
+            int samples = (int)(SampleRate * 0.16);
+            var buffer = new float[samples];
+            uint noise = 0x5EED5EED;
+
+            for (int i = 0; i < samples; i++)
+            {
+                float t = i / (float)samples;
+                float n = NextNoise(ref noise);
+                float click = i < 24 ? (1f - i / 24f) * 0.8f : 0f;
+                buffer[i] = (n * 0.7f + click) * MathF.Exp(-t * 9f);
             }
 
             return buffer;
