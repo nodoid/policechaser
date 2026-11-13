@@ -31,6 +31,8 @@ python3 tools/fuse_reference.py /tmp/chasehq/chase.tap /tmp/chasehq/screens
 | 100-unit clock, checkpoints extend the time | `TimeRemaining`, `CheckpointSpacing` |
 | Curving road, hills, roadside scenery | `Road.Build`, scanline renderer |
 | Traffic to weave through, off-road slows you | `Traffic`, `OffRoad` handling |
+| Crashing into traffic costs speed, time and car damage | `TrafficHit`, hull bar, `Wrecked` |
+| Stage number and location shown before and during the chase | Briefing header, `STAGE` HUD readout, countdown banner |
 | Radio messages from dispatch | HUD radio strip |
 | Turbo boost | `Turbo` meter |
 | Scoring with time bonus on a bust | `Race.RawScore` |

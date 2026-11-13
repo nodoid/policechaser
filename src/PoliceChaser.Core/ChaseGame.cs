@@ -594,7 +594,7 @@ namespace PoliceChaser
                     case RaceEventType.TrafficHit:
                         _shake = 1f;
                         _audio.Play(_audio.Crash, 0.9f);
-                        SetRadio("WATCH THE TRAFFIC!");
+                        SetRadio(evt.Value > 0 ? "CRASH! HULL " + evt.Value : "CAR WRECKED");
                         break;
                     case RaceEventType.Checkpoint:
                         _audio.Play(_audio.Checkpoint, 0.7f);
@@ -1750,7 +1750,8 @@ namespace PoliceChaser
 
             Panel(16, 22, 288, 172, new Color(8, 10, 26, 235), new Color(250, 210, 80));
 
-            TextCentered("PURSUIT BRIEFING", 160, 28, new Color(250, 210, 80));
+            TextCentered("STAGE " + (_campaignIndex + 1) + "/" + Mission.All.Count + " - PURSUIT BRIEFING",
+                160, 28, new Color(250, 210, 80));
             TextCentered(_mission.Title, 160, 42, Color.White, 2);
 
             TextWrapped(_mission.Tagline, 26, 64, 46, new Color(180, 195, 230));
@@ -1814,6 +1815,9 @@ namespace PoliceChaser
 
             if (_screen == GameScreen.Racing && _countdown > 0f)
             {
+                TextCentered("STAGE " + (_campaignIndex + 1) + " - " + _mission.Title, 160, 60,
+                    new Color(200, 215, 245));
+
                 int second = (int)MathF.Ceiling(_countdown);
                 if (second > 0)
                 {
@@ -2004,25 +2008,17 @@ namespace PoliceChaser
             }
 
             int gap = (int)(_race.Gap / 10f);
-            if (_mission.SuspectArmed)
+            Text("HULL", 112, 232, new Color(140, 150, 185));
+            for (int i = 0; i < _race.PlayerMaxHealth; i++)
             {
-                Text("HULL", 112, 232, new Color(140, 150, 185));
-                for (int i = 0; i < _race.PlayerMaxHealth; i++)
-                {
-                    Rect(136 + i * 11, 233, 8, 7,
-                        i < _race.PlayerHealth ? new Color(90, 220, 140) : new Color(40, 44, 60));
-                }
-
-                Text("RANGE " + gap.ToString("D4") + "M", 176, 232,
-                    _race.Escaping ? new Color(255, 120, 120) : new Color(140, 150, 185));
-            }
-            else
-            {
-                Text("RANGE " + gap.ToString("D4") + "M", 112, 232,
-                    _race.Escaping ? new Color(255, 120, 120) : new Color(140, 150, 185));
+                Rect(134 + i * 10, 233, 7, 7,
+                    i < _race.PlayerHealth ? new Color(90, 220, 140) : new Color(40, 44, 60));
             }
 
-            Text("MISSION", 250, 212, new Color(140, 150, 185));
+            Text("RANGE " + gap.ToString("D4") + "M", 134 + _race.PlayerMaxHealth * 10 + 5, 232,
+                _race.Escaping ? new Color(255, 120, 120) : new Color(140, 150, 185));
+
+            Text("STAGE", 250, 212, new Color(140, 150, 185));
             Text((_campaignIndex + 1) + "/" + Mission.All.Count, 250, 222, Color.White);
 
             Text("HI " + _scores.BestScore().ToString("D6"), 250, 232, new Color(250, 210, 80));

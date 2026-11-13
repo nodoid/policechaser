@@ -185,6 +185,10 @@ namespace PoliceChaser.Tests
                 });
                 lowestHull = Math.Min(lowestHull, race.PlayerHealth);
 
+                // Isolate the shooting: traffic crashes are covered by their own tests and
+                // would otherwise wreck the car before it ever gets into gun range.
+                race.Traffic.Clear();
+
                 foreach (RaceEvent evt in race.Events)
                 {
                     if (evt.Type == RaceEventType.Gunfire)
@@ -203,12 +207,54 @@ namespace PoliceChaser.Tests
         }
 
         [Fact]
-        public void Unarmed_missions_have_no_hull()
+        public void Unarmed_missions_carry_a_hull_and_traffic_damages_it()
         {
             Race race = NewRace();
-            Assert.Equal(0, race.PlayerMaxHealth);
+            Assert.Equal(4, race.PlayerMaxHealth);
+            Assert.Equal(4, race.PlayerHealth);
+
+            race.Traffic.Clear();
+            race.Traffic.Add(new TrafficCar { Z = race.PlayerZ + 300f, X = race.PlayerX, Speed = 0f });
+            float time = race.TimeRemaining;
+
+            race.Update(1f / 60f, Drive());
+
+            Assert.Equal(3, race.PlayerHealth);
+            Assert.Equal(1, race.TrafficHits);
+            Assert.True(race.TimeRemaining < time - 1.5f, "a crash must cost time as well as hull");
+        }
+
+        [Fact]
+        public void Traffic_is_caught_even_when_a_long_frame_jumps_over_it()
+        {
+            Race race = NewRace();
+            race.Traffic.Clear();
+
+            // An oncoming car on the nose: after a clamped frame the player has jumped past
+            // the 430-unit collision window, so only a swept test can register the impact.
+            race.Traffic.Add(new TrafficCar { Z = race.PlayerZ + 100f, X = race.PlayerX, Speed = -12000f });
+
+            race.Update(0.05f, Drive());
+
+            Assert.Equal(1, race.TrafficHits);
+            Assert.Equal(race.PlayerMaxHealth - 1, race.PlayerHealth);
+        }
+
+        [Fact]
+        public void Losing_all_hull_to_traffic_wrecks_the_car()
+        {
+            Race race = NewRace();
+            race.Traffic.Clear();
+
+            for (int i = 0; i < race.PlayerMaxHealth; i++)
+            {
+                race.Traffic.Add(new TrafficCar { Z = race.PlayerZ + 60f, X = race.PlayerX, Speed = 0f });
+                race.Update(1f / 60f, Drive());
+            }
+
+            Assert.True(race.Wrecked);
+            Assert.True(race.Finished);
             Assert.Equal(0, race.PlayerHealth);
-            Assert.False(race.Wrecked);
         }
 
         [Fact]

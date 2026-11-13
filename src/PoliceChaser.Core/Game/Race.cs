@@ -92,8 +92,11 @@ namespace PoliceChaser.Game
         public int RawScore { get; private set; }
         public int Score => DifficultyRules.Weight(Difficulty, RawScore);
 
-        /// <summary>Hull points. Only armed Series II suspects can damage the player.</summary>
-        public int PlayerMaxHealth => Mission.SuspectArmed ? 3 : 0;
+        /// <summary>
+        /// Hull points. Traffic is the main danger in Series I; armed Series II suspects also
+        /// shoot, so they get one point less to compensate.
+        /// </summary>
+        public int PlayerMaxHealth => Mission.SuspectArmed ? 3 : 4;
         public int PlayerHealth { get; private set; }
 
         public bool Busted { get; private set; }
@@ -120,7 +123,7 @@ namespace PoliceChaser.Game
 
             RivalMaxHealth = mission.RequiredRams;
             RivalHealth = mission.RequiredRams;
-            PlayerHealth = mission.SuspectArmed ? 3 : 0;
+            PlayerHealth = PlayerMaxHealth;
             _gunTimer = 1.8f;
 
             float suspectScale = DifficultyRules.SuspectSpeedScale(difficulty);
@@ -384,10 +387,36 @@ namespace PoliceChaser.Game
             for (int i = Traffic.Count - 1; i >= 0; i--)
             {
                 TrafficCar car = Traffic[i];
+
+                // Gap at the start of the step, before either car moved. At turbo speeds a
+                // clamped frame can carry the player straight past the collision window, so a
+                // car that was ahead and is now behind counts as an impact too.
+                float gapBefore = car.Z - PlayerZ + Speed * dt;
                 car.Z += car.Speed * dt;
 
                 float dz = car.Z - PlayerZ;
                 float dx = car.X - PlayerX;
+                bool crossed = gapBefore > 0f && dz <= 0f;
+
+                if ((MathF.Abs(dz) < 430f || crossed) && MathF.Abs(dx) < 0.36f)
+                {
+                    Speed *= 0.35f;
+                    TimeRemaining = MathF.Max(0.1f, TimeRemaining - 2.5f);
+                    TrafficHits++;
+                    _shake = 1f;
+                    PlayerHealth = Math.Max(0, PlayerHealth - 1);
+                    Traffic.RemoveAt(i);
+                    Events.Add(new RaceEvent { Type = RaceEventType.TrafficHit, Value = PlayerHealth });
+
+                    if (PlayerHealth <= 0)
+                    {
+                        Wrecked = true;
+                        Events.Add(new RaceEvent { Type = RaceEventType.Wrecked });
+                        return;
+                    }
+
+                    continue;
+                }
 
                 if (!car.Passed && dz < 0f && MathF.Abs(dx) < 0.62f && dz > -1400f)
                 {
@@ -395,17 +424,6 @@ namespace PoliceChaser.Game
                     NearMisses++;
                     RawScore += 55;
                     Events.Add(new RaceEvent { Type = RaceEventType.NearMiss, Value = 55 });
-                }
-
-                if (MathF.Abs(dz) < 430f && MathF.Abs(dx) < 0.33f)
-                {
-                    Speed *= 0.42f;
-                    TimeRemaining = MathF.Max(0.1f, TimeRemaining - 1.8f);
-                    TrafficHits++;
-                    _shake = 1f;
-                    Traffic.RemoveAt(i);
-                    Events.Add(new RaceEvent { Type = RaceEventType.TrafficHit });
-                    continue;
                 }
 
                 if (dz < -3200f || dz > 34000f)
