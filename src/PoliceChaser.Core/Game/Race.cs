@@ -10,6 +10,9 @@ namespace PoliceChaser.Game
         public bool Brake;
         public bool Turbo;
 
+        /// <summary>One-shot LO/HI toggle; only read when the race is in manual gearbox mode.</summary>
+        public bool Gear;
+
         public static RaceInput None => new RaceInput();
     }
 
@@ -130,6 +133,9 @@ namespace PoliceChaser.Game
         public bool HighGear { get; private set; }
 
         public string GearLabel => HighGear ? "HI" : "LO";
+
+        /// <summary>When true the gearbox ignores speed and waits for the gear button.</summary>
+        public bool ManualGears { get; }
         public float SpeedRatio => MathF.Min(1.6f, Speed / MaxSpeed);
         public bool OffRoad => MathF.Abs(PlayerX) > OffRoadLimit;
         public bool Escaping => Gap > 15000f;
@@ -137,10 +143,11 @@ namespace PoliceChaser.Game
         public List<TrafficCar> Traffic { get; } = new List<TrafficCar>(48);
         public List<RaceEvent> Events { get; } = new List<RaceEvent>(8);
 
-        public Race(Mission mission, Difficulty difficulty, int seed = 0)
+        public Race(Mission mission, Difficulty difficulty, int seed = 0, bool manualGears = false)
         {
             Mission = mission ?? throw new ArgumentNullException(nameof(mission));
             Difficulty = difficulty;
+            ManualGears = manualGears;
             Road = PoliceChaser.Game.Road.Build(mission, seed);
             _random = new Random(seed * 31 + 977);
 
@@ -186,6 +193,13 @@ namespace PoliceChaser.Game
             }
 
             Events.Clear();
+
+            if (ManualGears && input.Gear)
+            {
+                HighGear = !HighGear;
+                Events.Add(new RaceEvent { Type = RaceEventType.GearChange, Value = HighGear ? 1 : 0 });
+            }
+
             _shake = MathF.Max(0f, _shake - dt * 3.2f);
             _skid = MathF.Max(0f, _skid - dt * 2.4f);
             _ramCooldown = MathF.Max(0f, _ramCooldown - dt);
@@ -210,6 +224,12 @@ namespace PoliceChaser.Game
             // ---- longitudinal physics -------------------------------------------------
             bool boosting = input.Turbo && Turbo > 0.02f && !offRoad;
             float maxSpeed = boosting ? TurboMaxSpeed : MaxSpeed;
+            if (ManualGears && !HighGear)
+            {
+                // Low gear is a real limiter in manual mode: the player has to shift before
+                // the car will run past 58% of its top speed.
+                maxSpeed = MathF.Min(maxSpeed, MaxSpeed * 0.58f);
+            }
 
             float acceleration;
             if (offRoad)
@@ -250,6 +270,13 @@ namespace PoliceChaser.Game
                 Speed = MathF.Max(maxSpeed, Speed - 5200f * dt);
             }
 
+            // Boost acceleration outruns the soft overspeed decay above, so low gear needs a
+            // hard ceiling; shifting down at speed bleeds off rather than snapping instantly.
+            if (ManualGears && !HighGear)
+            {
+                Speed = MathF.Min(Speed, MathF.Max(MaxSpeed * 0.58f, Speed - 5200f * dt));
+            }
+
             if (offRoad)
             {
                 Speed = MathF.Min(Speed, 3800f + 2400f * MathF.Abs(PlayerX - OffRoadLimit));
@@ -261,7 +288,10 @@ namespace PoliceChaser.Game
             }
 
             Speed = Math.Clamp(Speed, 0f, TurboMaxSpeed);
-            UpdateGear();
+            if (!ManualGears)
+            {
+                UpdateGear();
+            }
 
             // ---- lateral physics ------------------------------------------------------
             float curve = Road.CurveAt(PlayerZ);

@@ -12,6 +12,9 @@ namespace PoliceChaser.Game
 
         public float Effects { get; set; } = 1f;
 
+        /// <summary>False keeps the LO/HI box automatic (the default); true hands it to the player.</summary>
+        public bool ManualGears { get; set; }
+
         public static float Clamp(float value)
         {
             return MathF.Round(Math.Clamp(value, 0f, 1f) * 10f) / 10f;
@@ -105,6 +108,12 @@ namespace PoliceChaser.Game
         public void SetEffects(float value)
         {
             Value.Effects = GameSettings.Clamp(value);
+            Save();
+        }
+
+        public void SetManualGears(bool manual)
+        {
+            Value.ManualGears = manual;
             Save();
         }
     }

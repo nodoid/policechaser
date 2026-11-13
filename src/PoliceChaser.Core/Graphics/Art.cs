@@ -295,8 +295,7 @@ namespace PoliceChaser.Graphics
         public Texture2D[] OncomingCars { get; }
         public Texture2D Badge { get; }
         public Texture2D SplashArt { get; }
-        public Texture2D HqOperator { get; }
-        public Texture2D HqOperatorTalking { get; }
+        public Texture2D[] HqOperatorFrames { get; }
         public Texture2D PlayerPortrait { get; }
 
         private static readonly Color Blue = new Color(38, 78, 196);
@@ -352,8 +351,12 @@ namespace PoliceChaser.Graphics
 
             Badge = BuildBadge();
             SplashArt = BuildSplashArt();
-            HqOperator = BuildHqOperator(false);
-            HqOperatorTalking = BuildHqOperator(true);
+            HqOperatorFrames = new Texture2D[4];
+            for (int i = 0; i < HqOperatorFrames.Length; i++)
+            {
+                HqOperatorFrames[i] = BuildHqOperator(i);
+            }
+
             PlayerPortrait = BuildPlayerPortrait();
         }
 
@@ -694,7 +697,7 @@ namespace PoliceChaser.Graphics
         }
 
         /// <summary>HQ dispatcher at the other end of the radio, in the style of the 8-bit original.</summary>
-        private Texture2D BuildHqOperator(bool talking)
+        private Texture2D BuildHqOperator(int frame)
         {
             var canvas = new Canvas(26, 18);
             canvas.Clear(new Color(16, 22, 46));
@@ -715,17 +718,27 @@ namespace PoliceChaser.Graphics
             canvas.FillRect(18, 6, 3, 4, new Color(28, 32, 46));
             canvas.FillRect(9, 12, 6, 1, new Color(28, 32, 46));
             canvas.FillRect(9, 11, 2, 2, new Color(28, 32, 46));
-            canvas.Set(11, 12, talking ? new Color(255, 96, 80) : new Color(150, 50, 60));
+            // Frame 0 is idle; 1-3 are the talking loop, with the mic LED blinking on frame 2.
+            canvas.Set(11, 12,
+                frame == 2 ? new Color(90, 40, 50) :
+                frame > 0 ? new Color(255, 96, 80) : new Color(150, 50, 60));
 
-            // Mouth opens and closes while she is on the radio.
-            if (talking)
+            switch (frame)
             {
-                canvas.FillRect(11, 10, 4, 3, new Color(96, 44, 44));
-                canvas.FillRect(12, 10, 2, 1, new Color(242, 236, 230));
-            }
-            else
-            {
-                canvas.FillRect(11, 11, 4, 1, new Color(172, 96, 84));
+                case 1:
+                    canvas.FillRect(11, 10, 4, 2, new Color(96, 44, 44));
+                    canvas.FillRect(12, 10, 2, 1, new Color(242, 236, 230));
+                    break;
+                case 2:
+                    canvas.FillRect(11, 11, 4, 1, new Color(120, 60, 60));
+                    break;
+                case 3:
+                    canvas.FillRect(10, 10, 6, 3, new Color(96, 44, 44));
+                    canvas.FillRect(11, 10, 4, 1, new Color(242, 236, 230));
+                    break;
+                default:
+                    canvas.FillRect(11, 11, 4, 1, new Color(172, 96, 84));
+                    break;
             }
 
             // Eyes.

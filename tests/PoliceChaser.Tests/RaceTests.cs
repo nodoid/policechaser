@@ -410,6 +410,42 @@ namespace PoliceChaser.Tests
         }
 
         [Fact]
+        public void Manual_gears_hold_low_until_the_player_shifts()
+        {
+            Race race = new Race(Mission.ById("harbour"), Difficulty.Beginner, 7, manualGears: true);
+
+            for (int i = 0; i < 60 * 3; i++)
+            {
+                race.Traffic.Clear();
+                race.Update(1f / 60f, Drive(HoldLane(race, 0f)));
+            }
+
+            Assert.False(race.HighGear);
+            Assert.True(race.Speed > Race.MaxSpeed * 0.4f,
+                "the car should be running at the low-gear cap, was " + race.Speed);
+            Assert.True(race.Speed <= Race.MaxSpeed * 0.62f,
+                "low gear should cap speed, was " + race.Speed);
+
+            race.Update(1f / 60f, new RaceInput
+            {
+                Accelerate = true,
+                Turbo = true,
+                Gear = true,
+                Steer = HoldLane(race, 0f)
+            });
+            Assert.True(race.HighGear);
+
+            for (int i = 0; i < 60 * 3; i++)
+            {
+                race.Traffic.Clear();
+                race.Update(1f / 60f, Drive(HoldLane(race, 0f)));
+            }
+
+            Assert.True(race.Speed > Race.MaxSpeed * 0.7f,
+                "high gear should get the car up to speed, was " + race.Speed);
+        }
+
+        [Fact]
         public void Armed_fire_warns_before_the_round_lands()
         {
             Race race = new Race(Mission.ById("steelworks"), Difficulty.Beginner, 4321);

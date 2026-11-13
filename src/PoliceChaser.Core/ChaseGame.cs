@@ -95,6 +95,8 @@ namespace PoliceChaser
         private InputFrame _input;
         private bool _PointerSeen;
         private bool _mouseWasDown;
+        private bool _gearKeyWasDown;
+        private bool _gearPadWasDown;
         private TouchCollection _previousTouches;
         private bool _selfTest;
         private string _selfTestScreen = "title";
@@ -115,6 +117,7 @@ namespace PoliceChaser
             public bool Pause;
             public bool Turbo;
             public bool Brake;
+            public bool Gear;
             public Vector2 Pointer;
             public bool PointerDown;
             public bool PointerPressed;
@@ -391,7 +394,10 @@ namespace PoliceChaser
         // ------------------------------------------------------------------ settings
 
         private static Rectangle SettingsButton => new Rectangle(96, 206, 100, 24);
-        private static Rectangle SettingsDone => new Rectangle(120, 182, 80, 26);
+        private static Rectangle SettingsDone => new Rectangle(120, 198, 80, 26);
+        private static Rectangle SettingsGearRow => new Rectangle(20, 152, 280, 40);
+        private static Rectangle SettingsAuto => new Rectangle(112, 158, 78, 24);
+        private static Rectangle SettingsManual => new Rectangle(198, 158, 78, 24);
         private static Rectangle SettingsRow(int row) => new Rectangle(20, 68 + row * 42, 280, 40);
         private static Rectangle SettingsMinus(int row) => new Rectangle(96, 76 + row * 42, 24, 22);
         private static Rectangle SettingsPlus(int row) => new Rectangle(232, 76 + row * 42, 24, 22);
@@ -439,6 +445,30 @@ namespace PoliceChaser
                     }
                 }
 
+                if (SettingsGearRow.Contains(point))
+                {
+                    _settingsRow = 2;
+                    _audio.Play(_audio.Select);
+                    _input.Confirm = false;
+                    return;
+                }
+
+                if (SettingsAuto.Contains(point))
+                {
+                    _settingsRow = 2;
+                    SetGearbox(false);
+                    _input.Confirm = false;
+                    return;
+                }
+
+                if (SettingsManual.Contains(point))
+                {
+                    _settingsRow = 2;
+                    SetGearbox(true);
+                    _input.Confirm = false;
+                    return;
+                }
+
                 if (SettingsDone.Contains(point))
                 {
                     _audio.Play(_audio.Select);
@@ -452,24 +482,26 @@ namespace PoliceChaser
 
             if (_input.Up)
             {
-                _settingsRow = 0;
+                _settingsRow = (_settingsRow + 2) % 3;
                 _audio.Play(_audio.Select);
             }
 
             if (_input.Down)
             {
-                _settingsRow = 1;
+                _settingsRow = (_settingsRow + 1) % 3;
                 _audio.Play(_audio.Select);
             }
 
-            if (_input.Left)
+            if (_input.Left || _input.Right)
             {
-                AdjustVolume(-0.1f);
-            }
-
-            if (_input.Right)
-            {
-                AdjustVolume(0.1f);
+                if (_settingsRow < 2)
+                {
+                    AdjustVolume(_input.Right ? 0.1f : -0.1f);
+                }
+                else
+                {
+                    SetGearbox(!_settings.Value.ManualGears);
+                }
             }
 
             if (_input.Confirm || _input.Back)
@@ -505,8 +537,9 @@ namespace PoliceChaser
 
             DrawVolumeRow(0, "MUSIC", _audio.MusicVolume);
             DrawVolumeRow(1, "EFFECTS", _audio.EffectsVolume);
+            DrawGearRow();
 
-            TextCentered("UP/DOWN SELECT - LEFT/RIGHT ADJUST", 160, 160, new Color(150, 170, 210));
+            TextCentered("UP/DOWN SELECT - LEFT/RIGHT ADJUST", 160, 190, new Color(150, 170, 210));
             DrawKey(SettingsDone, "DONE");
         }
 
@@ -533,6 +566,33 @@ namespace PoliceChaser
             }
 
             Text((filled * 10).ToString("D2") + "%", 262, y + 2, new Color(160, 190, 230));
+        }
+
+        private void DrawGearRow()
+        {
+            bool selected = _settingsRow == 2;
+            Panel(24, 152, 272, 36,
+                selected ? new Color(24, 32, 66) : new Color(10, 14, 28),
+                selected ? new Color(250, 210, 80) : new Color(50, 60, 90));
+
+            Text("GEARS", 34, 164, selected ? Color.White : new Color(190, 200, 220));
+            DrawOptionChip(SettingsAuto, "AUTO", !_settings.Value.ManualGears);
+            DrawOptionChip(SettingsManual, "MANUAL", _settings.Value.ManualGears);
+        }
+
+        private void DrawOptionChip(Rectangle rect, string label, bool on)
+        {
+            Rect(rect.X, rect.Y, rect.Width, rect.Height, on ? new Color(40, 50, 100) : new Color(14, 18, 34));
+            HudFrame(rect.X, rect.Y, rect.Width, rect.Height,
+                on ? new Color(250, 210, 80) : new Color(70, 80, 110));
+            TextCentered(label, rect.X + rect.Width / 2, rect.Y + rect.Height / 2 - 3,
+                on ? Color.White : new Color(170, 180, 210));
+        }
+
+        private void SetGearbox(bool manual)
+        {
+            _settings.SetManualGears(manual);
+            _audio.Play(_audio.Select);
         }
 
         private void UpdateDifficultySelect()
@@ -647,7 +707,8 @@ namespace PoliceChaser
         private void StartMission()
         {
             _mission = Mission.All[_campaignIndex];
-            _race = new Race(_mission, _difficulty, Environment.TickCount + _campaignIndex * 977);
+            _race = new Race(_mission, _difficulty, Environment.TickCount + _campaignIndex * 977,
+                _settings.Value.ManualGears);
             _countdown = 3.35f;
             _lastCountdownSecond = -1;
             _shake = 0f;
@@ -702,7 +763,8 @@ namespace PoliceChaser
                 Steer = _input.Steer,
                 Accelerate = !_input.Brake,
                 Brake = _input.Brake,
-                Turbo = _input.Turbo
+                Turbo = _input.Turbo,
+                Gear = _input.Gear
             };
 
             _race.Update(dt, raceInput);
@@ -1165,6 +1227,7 @@ namespace PoliceChaser
                     _PointerSeen = true;
                     _missionCursor = 0;
                     _difficulty = Difficulty.Beginner;
+                    _settings.SetManualGears(true);
                     StartCampaign();
                     _countdown = 0f;
                     break;
@@ -1311,6 +1374,13 @@ namespace PoliceChaser
             pad = default;
             ApplyRacingTouch(ref pad, new Vector2(BrakePad.Center.X, BrakePad.Center.Y), true);
             Check("race: BRK pad", pad.Brake);
+
+            _settings.SetManualGears(true);
+            pad = default;
+            pad.PointerPressed = true;
+            ApplyRacingTouch(ref pad, new Vector2(GearPad.Center.X, GearPad.Center.Y), true);
+            Check("race: GEAR pad shifts", pad.Gear);
+            _settings.SetManualGears(false);
 
             pad = default;
             ApplyRacingTouch(ref pad, new Vector2(280, 130), true);
@@ -1471,6 +1541,13 @@ namespace PoliceChaser
             frame.Pause = keys.IsKeyDown(Keys.Escape) || keys.IsKeyDown(Keys.P) || pad.Buttons.Start == ButtonState.Pressed;
             frame.Back = keys.IsKeyDown(Keys.Escape) || pad.Buttons.B == ButtonState.Pressed;
 
+            // Gear is a one-shot toggle, not a held state, so LO/HI flips once per press.
+            bool gearKey = keys.IsKeyDown(Keys.X);
+            bool gearPad = pad.Buttons.Y == ButtonState.Pressed;
+            frame.Gear = (gearKey && !_gearKeyWasDown) || (gearPad && !_gearPadWasDown);
+            _gearKeyWasDown = gearKey;
+            _gearPadWasDown = gearPad;
+
             MouseState mouse = Mouse.GetState();
             bool mouseDown = mouse.LeftButton == ButtonState.Pressed;
             bool mousePressed = mouseDown && !_mouseWasDown;
@@ -1541,7 +1618,11 @@ namespace PoliceChaser
 
             Point point = pointer.ToPoint();
 
-            if (TurboPad.Contains(point))
+            if (GearPad.Contains(point) && frame.PointerPressed && _settings.Value.ManualGears)
+            {
+                frame.Gear = true;
+            }
+            else if (TurboPad.Contains(point))
             {
                 frame.Turbo = true;
             }
@@ -2355,11 +2436,8 @@ namespace PoliceChaser
             Text(((int)(_race.Gap / 10f)).ToString("D4") + "M", 186, 28, stage);
 
             // HQ video link: the dispatcher above, the player below, as in the original.
-            bool dispatcherTalking = _radioTimer > 0f;
-            Texture2D dispatcher = dispatcherTalking && ((int)(_time * 9f) & 1) == 0
-                ? _art.HqOperatorTalking
-                : _art.HqOperator;
-            Image(dispatcher, 230, 5, 26, 16);
+            int dispatcherFrame = _radioTimer > 0f ? 1 + (int)(_time * 10f) % 3 : 0;
+            Image(_art.HqOperatorFrames[dispatcherFrame], 230, 5, 26, 16);
             Image(_art.PlayerPortrait, 230, 25, 26, 16);
             Text("HQ", 260, 7, new Color(120, 200, 240));
             Text("YOU", 260, 27, new Color(180, 210, 240));
@@ -2423,6 +2501,8 @@ namespace PoliceChaser
         private static readonly Rectangle SteerRightPad = new Rectangle(68, 146, 60, 60);
         private static readonly Rectangle BrakePad = new Rectangle(198, 146, 48, 60);
         private static readonly Rectangle TurboPad = new Rectangle(250, 146, 64, 60);
+        // Manual-gearbox button, shown above TURBO only when the player has opted in.
+        private static readonly Rectangle GearPad = new Rectangle(250, 108, 64, 32);
 
         private void DrawTouchControls()
         {
@@ -2430,6 +2510,11 @@ namespace PoliceChaser
             DrawTouchPad(SteerRightPad, ">", 2);
             DrawTouchPad(BrakePad, "BRK", 1);
             DrawTouchPad(TurboPad, "TURBO", 1);
+
+            if (_settings.Value.ManualGears)
+            {
+                DrawTouchPad(GearPad, "GEAR " + _race.GearLabel, 1);
+            }
         }
 
         private void DrawTouchPad(Rectangle rectangle, string label, int scale)
@@ -2693,9 +2778,17 @@ namespace PoliceChaser
             ScoreEntry highlighted = _highlightIndex >= 0 && _highlightIndex < table.Entries.Count
                 ? table.Entries[_highlightIndex]
                 : null;
-            bool hasSummary = highlighted != null && !string.IsNullOrEmpty(highlighted.RunSummary);
-            TextCentered(hasSummary ? highlighted.RunSummary : "TOP 10 - SCORE IS WEIGHTED BY SKILL",
-                160, 200, hasSummary ? new Color(250, 200, 200) : new Color(140, 150, 185));
+            if (highlighted != null)
+            {
+                TextCentered(highlighted.DifficultyLabel + " - " + highlighted.MissionLabel,
+                    160, 192, new Color(160, 190, 230));
+                TextCentered(string.IsNullOrEmpty(highlighted.RunSummary) ? "LEGACY ENTRY" : highlighted.RunSummary,
+                    160, 202, new Color(250, 200, 200));
+            }
+            else
+            {
+                TextCentered("TOP 10 - SCORE IS WEIGHTED BY SKILL", 160, 200, new Color(140, 150, 185));
+            }
             if (Blink(2f))
             {
                 TextCentered(ConfirmPrompt + " TO RETURN", 160, 218, Color.White);

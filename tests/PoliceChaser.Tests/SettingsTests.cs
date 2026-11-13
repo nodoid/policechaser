@@ -20,10 +20,19 @@ namespace PoliceChaser.Tests
             var first = new SettingsStore(file);
             first.SetMusic(0.4f);
             first.SetEffects(0.8f);
+            first.SetManualGears(true);
 
             var second = new SettingsStore(file);
             Assert.Equal(0.4f, second.Value.Music, 3);
             Assert.Equal(0.8f, second.Value.Effects, 3);
+            Assert.True(second.Value.ManualGears);
+        }
+
+        [Fact]
+        public void Gearbox_defaults_to_automatic()
+        {
+            var store = new SettingsStore(new MemorySettingsFile());
+            Assert.False(store.Value.ManualGears);
         }
 
         [Fact]
