@@ -49,7 +49,7 @@ namespace PoliceChaser
         private SpriteBatch _spriteBatch;
         private RenderTarget2D _target;
         private Texture2D _white;
-        private PixelFont _font;
+        private GameFont _font;
         private Art _art;
         private ChipAudio _audio;
         private HighScoreStore _scores;
@@ -150,7 +150,7 @@ namespace PoliceChaser
             _white = new Texture2D(GraphicsDevice, 1, 1);
             _white.SetData(new[] { Color.White });
 
-            _font = new PixelFont(GraphicsDevice);
+            _font = new GameFont();
             _art = new Art(GraphicsDevice);
             _audio = new ChipAudio();
             _scores = new HighScoreStore(new LocalHighScoreFile(LocalHighScoreFile.DefaultRoot));
@@ -174,7 +174,7 @@ namespace PoliceChaser
             _scores?.Save();
             _audio?.Dispose();
             _art?.Dispose();
-            _font?.Atlas?.Dispose();
+            _font?.Dispose();
             _white?.Dispose();
             _target?.Dispose();
             base.UnloadContent();

@@ -10,6 +10,11 @@ All art is baked at 4x and the game renders to a 1280x960 target that is smoothl
 the window or device, so it is not an upscaled 320x240 picture: text, road, scenery and cars
 are all drawn at full resolution on every platform.
 
+Text uses an anti-aliased outline typeface rather than a bitmap font. The OFL-licensed
+**Chakra Petch** TTF is embedded in the core assembly and rasterised at the target resolution
+for each text size (via FontStashSharp), so headings and the HUD stay smooth at every scale.
+The licence is at `src/PoliceChaser.Core/Graphics/Fonts/OFL.txt`.
+
 No artwork, code, music or data from any commercial game is included. Every sprite, sound,
 music track, the logo and the app icon are generated procedurally by the game at runtime or
 baked by `tools/gen_icons.py`.

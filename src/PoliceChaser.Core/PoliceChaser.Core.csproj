@@ -9,6 +9,12 @@
     <ApplicationIdGuid>a6eaeb04-6634-41c1-bdfe-695819ece444</ApplicationIdGuid>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="FontStashSharp.MonoGame" Version="1.6.2" />
+    <EmbeddedResource Include="Graphics/Fonts/ChakraPetch-SemiBold.ttf"
+                      LogicalName="PoliceChaser.Graphics.Fonts.ChakraPetch-SemiBold.ttf" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="$(MonoGameVersion)" />
   </ItemGroup>
