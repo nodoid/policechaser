@@ -743,8 +743,58 @@ namespace PoliceChaser
 
         private char[] _letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!-".ToCharArray();
 
+        private static Rectangle NameBox(int index)
+        {
+            return new Rectangle(107 + index * 38, 95, 30, 36);
+        }
+
+        private static Rectangle NameUpButton => new Rectangle(107, 80, 106, 13);
+        private static Rectangle NameDownButton => new Rectangle(107, 134, 106, 13);
+        private static Rectangle NameOkButton => new Rectangle(222, 95, 60, 36);
+
         private void UpdateNameEntry()
         {
+            // On touch screens every part of name entry is an explicit, tappable control.
+            bool touchUi = MobilePlatform || _PointerSeen;
+            if (touchUi && _input.PointerPressed)
+            {
+                Point point = _input.Pointer.ToPoint();
+                bool handled = false;
+
+                for (int i = 0; i < 3; i++)
+                {
+                    if (NameBox(i).Contains(point))
+                    {
+                        _nameCursor = i;
+                        _audio.Play(_audio.Select);
+                        handled = true;
+                    }
+                }
+
+                if (NameUpButton.Contains(point))
+                {
+                    ChangeNameLetter(1);
+                    handled = true;
+                }
+                else if (NameDownButton.Contains(point))
+                {
+                    ChangeNameLetter(-1);
+                    handled = true;
+                }
+                else if (NameOkButton.Contains(point))
+                {
+                    SubmitNameEntry();
+                    return;
+                }
+
+                // The tap belongs to the name-entry UI even if it hit empty space.
+                _input.Confirm = false;
+                if (handled)
+                {
+                    return;
+                }
+            }
+
             if (_input.Left)
             {
                 _nameCursor = (_nameCursor + 2) % 3;
@@ -757,33 +807,40 @@ namespace PoliceChaser
                 _audio.Play(_audio.Select);
             }
 
-            int current = Array.IndexOf(_letters, _nameLetters[_nameCursor]);
-
             if (_input.Up)
             {
-                current = (current + 1) % _letters.Length;
-                _nameLetters[_nameCursor] = _letters[current];
-                _audio.Play(_audio.Select);
+                ChangeNameLetter(1);
             }
 
             if (_input.Down)
             {
-                current = (current + _letters.Length - 1) % _letters.Length;
-                _nameLetters[_nameCursor] = _letters[current];
-                _audio.Play(_audio.Select);
+                ChangeNameLetter(-1);
             }
 
             if (_input.Confirm)
             {
-                string name = new string(_nameLetters);
-                _pendingEntry.Name = name;
-                _lastName = name;
-                _lastRank = _scores.Submit(_pendingEntry);
-                _highlightIndex = _lastRank - 1;
-                _scoreSubmitted = true;
-                _audio.Play(_audio.Beep, 0.9f, 0.2f);
-                SetScreen(GameScreen.HighScores);
+                SubmitNameEntry();
             }
+        }
+
+        private void ChangeNameLetter(int direction)
+        {
+            int current = Array.IndexOf(_letters, _nameLetters[_nameCursor]);
+            current = (current + direction + _letters.Length) % _letters.Length;
+            _nameLetters[_nameCursor] = _letters[current];
+            _audio.Play(_audio.Select);
+        }
+
+        private void SubmitNameEntry()
+        {
+            string name = new string(_nameLetters);
+            _pendingEntry.Name = name;
+            _lastName = name;
+            _lastRank = _scores.Submit(_pendingEntry);
+            _highlightIndex = _lastRank - 1;
+            _scoreSubmitted = true;
+            _audio.Play(_audio.Beep, 0.9f, 0.2f);
+            SetScreen(GameScreen.HighScores);
         }
 
         private void UpdateHighScores()
@@ -857,6 +914,7 @@ namespace PoliceChaser
                     SetScreen(GameScreen.GameOver);
                     break;
                 case "name":
+                    _PointerSeen = true;
                     _pendingEntry = new ScoreEntry
                     {
                         Score = 9120,
@@ -1001,7 +1059,10 @@ namespace PoliceChaser
 
             if (MobilePlatform && _PointerSeen)
             {
-                frame.Confirm = keyConfirm || padConfirm || pointerPressed;
+                // Name entry has its own on-screen keys, so a stray tap must not submit the
+                // score before the player has had a chance to pick their letters.
+                bool touchConfirms = _screen != GameScreen.NameEntry;
+                frame.Confirm = keyConfirm || padConfirm || (pointerPressed && touchConfirms);
                 if (pointerDown)
                 {
                     frame.Turbo = false;
@@ -1941,26 +2002,51 @@ namespace PoliceChaser
             Background(MissionTheme.Neon);
             SirenStrip(0);
 
-            Panel(40, 50, 240, 130, new Color(8, 10, 26, 240), new Color(250, 210, 80));
-            TextShadow("NEW HIGH SCORE", 160, 60, new Color(250, 220, 120), 2);
-            TextCentered("SCORE " + _pendingEntry.Score.ToString("D6"), 160, 86, Color.White);
+            Panel(24, 40, 272, 140, new Color(8, 10, 26, 240), new Color(250, 210, 80));
+            TextShadow("NEW HIGH SCORE", 160, 48, new Color(250, 220, 120), 2);
+            TextCentered("SCORE " + _pendingEntry.Score.ToString("D6"), 160, 68, Color.White);
+
+            bool touchUi = MobilePlatform || _PointerSeen;
+
+            if (touchUi)
+            {
+                DrawKey(NameUpButton, "UP");
+            }
 
             for (int i = 0; i < 3; i++)
             {
-                int x = 118 + i * 32;
+                Rectangle box = NameBox(i);
                 bool selected = i == _nameCursor;
-                Panel(x, 104, 26, 34, selected ? new Color(40, 50, 100) : new Color(14, 18, 34),
+                Panel(box.X, box.Y, box.Width, box.Height,
+                    selected ? new Color(40, 50, 100) : new Color(14, 18, 34),
                     selected ? new Color(250, 210, 80) : new Color(70, 80, 110));
-                TextCentered(_nameLetters[i].ToString(), x + 13, 114, Color.White, 2);
+                TextCentered(_nameLetters[i].ToString(), box.X + box.Width / 2, box.Y + 9, Color.White, 2);
             }
 
-            TextCentered("UP/DOWN LETTER - LEFT/RIGHT MOVE - FIRE TO ENTER", 160, 150,
-                new Color(150, 170, 210), 1);
-
-            if (Blink(2f))
+            if (touchUi)
             {
-                TextCentered("FIRE TO CONFIRM", 160, 164, new Color(200, 220, 250));
+                DrawKey(NameDownButton, "DOWN");
+                DrawKey(NameOkButton, "OK");
+                TextCentered("TAP A BOX - UP/DOWN CHANGES IT", 160, 153, new Color(150, 170, 210));
+                TextCentered("OK ENTERS THE NAME", 160, 164, new Color(150, 170, 210));
             }
+            else
+            {
+                TextCentered("UP/DOWN LETTER - LEFT/RIGHT MOVE", 160, 146, new Color(150, 170, 210));
+
+                if (Blink(2f))
+                {
+                    TextCentered("FIRE TO CONFIRM", 160, 158, new Color(200, 220, 250));
+                }
+            }
+        }
+
+        private void DrawKey(Rectangle rect, string label)
+        {
+            Rect(rect.X, rect.Y, rect.Width, rect.Height, new Color(30, 38, 64, 220));
+            Rect(rect.X, rect.Y, rect.Width, 1, new Color(120, 150, 210, 150));
+            Rect(rect.X, rect.Y + rect.Height - 1, rect.Width, 1, new Color(120, 150, 210, 150));
+            TextCentered(label, rect.X + rect.Width / 2, rect.Y + rect.Height / 2 - 3, new Color(200, 220, 250));
         }
 
         private void DrawHighScores()
