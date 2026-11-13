@@ -2295,7 +2295,8 @@ namespace PoliceChaser
         {
             Rect(x - 6, y + h - 4, w + 12, 6, new Color(0, 0, 0, 130));
 
-            _spriteBatch.Draw(_art.PlayerCar, new Rectangle(x, y, w, h), new Color(165, 162, 168));
+            _spriteBatch.Draw(_art.PlayerCar, new Rectangle(x * S, y * S, w * S, h * S),
+                new Color(165, 162, 168));
 
             // Dents in the bodywork.
             Rect(x + w / 4, y + h / 3, w / 6, 4, new Color(70, 66, 70, 200));
