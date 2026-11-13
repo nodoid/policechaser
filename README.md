@@ -146,7 +146,8 @@ dotnet run --project src/PoliceChaser.Desktop -- --selftest race --frames 200 --
 ```
 
 Screens: `splash`, `title`, `difficulty`, `mission`, `briefing`, `briefing2`, `race`, `race2`,
-`race3`, `busted`, `gameover`, `name`, `scores`.
+`race3`, `busted`, `gameover`, `name`, `nametap`, `scores`. `nametap` feeds one simulated touch
+tap through the name-entry keys, which is how the mobile letter picker is smoke tested.
 
 ## Layout
 

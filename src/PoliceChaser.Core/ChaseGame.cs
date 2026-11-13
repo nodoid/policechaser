@@ -97,6 +97,7 @@ namespace PoliceChaser
         private string _selfTestPath = "selftest.png";
         private int _selfTestFrames = 90;
         private int _selfTestFrame;
+        private bool _selfTestTapped;
 
         private struct InputFrame
         {
@@ -914,6 +915,7 @@ namespace PoliceChaser
                     SetScreen(GameScreen.GameOver);
                     break;
                 case "name":
+                case "nametap":
                     _PointerSeen = true;
                     _pendingEntry = new ScoreEntry
                     {
@@ -965,6 +967,19 @@ namespace PoliceChaser
 
         private void UpdateSelfTest(float dt)
         {
+            // Feeds one real touch tap through the name-entry handler so the mobile keys can be
+            // checked without a phone in hand.
+            if (_selfTestScreen == "nametap" && !_selfTestTapped && _screenTime > 0.1f)
+            {
+                _selfTestTapped = true;
+                InputFrame saved = _input;
+                _input.Pointer = new Vector2(NameUpButton.Center.X, NameUpButton.Center.Y);
+                _input.PointerPressed = true;
+                _input.Confirm = false;
+                UpdateNameEntry();
+                _input = saved;
+            }
+
             if (_screen == GameScreen.Racing && _race != null)
             {
                 _input.Steer = MathF.Sin(_screenTime * 1.25f) * 0.3f;
@@ -1424,7 +1439,7 @@ namespace PoliceChaser
 
             if (MobilePlatform)
             {
-                TextCentered("TAP TO DEPLOY", 160, 176, new Color(140, 200, 250));
+                TextCentered("TAP TO DEPLOY", 110, 176, new Color(140, 200, 250));
             }
 
             ScoreEntry best = _scores.Table.Best();
