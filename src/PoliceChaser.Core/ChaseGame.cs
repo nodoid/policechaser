@@ -1605,7 +1605,7 @@ namespace PoliceChaser
 
             if (MobilePlatform)
             {
-                TextCentered("ON-SCREEN PADS IN RACE", 160, 190, new Color(120, 160, 210));
+                TextCentered("ON-SCREEN PADS IN RACE", 110, 176, new Color(120, 160, 210));
             }
 
             ScoreEntry best = _scores.Table.Best();
