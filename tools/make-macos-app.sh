@@ -17,7 +17,8 @@ APP="$OUT/$APP_NAME.app"
 echo "== publishing $RID =="
 rm -rf "$OUT"
 dotnet publish "$ROOT/src/PoliceChaser.Desktop/PoliceChaser.Desktop.csproj" \
-  -c Release -r "$RID" --self-contained false -o "$OUT/publish" --nologo
+  -c Release -r "$RID" --self-contained false -o "$OUT/publish" --nologo \
+  -p:UseMonoRuntime=false
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp -R "$OUT/publish/." "$APP/Contents/MacOS/"

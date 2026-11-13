@@ -74,14 +74,15 @@ Requirements: .NET 10 SDK, MonoGame templates not required (no content pipeline 
 Xcode 26+ for the Apple targets, Android SDK 36 installed (targets/minSdk 32).
 
 ```bash
-dotnet build PoliceChaser.sln
+dotnet build PoliceChaser.slnx
 
 # macOS .app bundle (osx-arm64 by default)
 tools/make-macos-app.sh                 # ad-hoc signed
 tools/make-macos-app.sh --sign          # signed with the installed Apple identity
 
-# Windows 11 (win-x64)
+# Windows 11 (win-x64, or RID=win-arm64 for Parallels on Apple silicon)
 SELF_CONTAINED=1 tools/publish-windows.sh
+RID=win-arm64 SELF_CONTAINED=1 tools/publish-windows.sh
 
 # Android APK (application id uk.co.allthejohnsons.policechaser)
 dotnet publish src/PoliceChaser.Android -c Release -f net10.0-android36.0

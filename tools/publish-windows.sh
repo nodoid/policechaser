@@ -6,19 +6,21 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="$ROOT/artifacts/windows-x64"
+RID="${RID:-win-x64}"
+OUT="$ROOT/artifacts/$RID"
 SELF_CONTAINED="${SELF_CONTAINED:-0}"
 
-echo "== publishing win-x64 =="
+echo "== publishing $RID =="
 rm -rf "$OUT"
 if [[ "$SELF_CONTAINED" == "1" ]]; then
   dotnet publish "$ROOT/src/PoliceChaser.Desktop/PoliceChaser.Desktop.csproj" \
-    -c Release -r win-x64 --self-contained true -o "$OUT" --nologo \
+    -c Release -r "$RID" --self-contained true -o "$OUT" --nologo \
     -p:PublishTrimmed=false -p:EnableCompressionInSingleFile=true \
     -p:UseMonoRuntime=false
 else
   dotnet publish "$ROOT/src/PoliceChaser.Desktop/PoliceChaser.Desktop.csproj" \
-    -c Release -r win-x64 --self-contained false -o "$OUT" --nologo
+    -c Release -r "$RID" --self-contained false -o "$OUT" --nologo \
+    -p:UseMonoRuntime=false
 fi
 
 mkdir -p "$OUT/Assets"
