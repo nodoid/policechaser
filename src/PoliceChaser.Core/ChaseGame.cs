@@ -166,6 +166,7 @@ namespace PoliceChaser
                 PrepareSelfTest();
             }
 
+
             base.LoadContent();
         }
 
@@ -1133,11 +1134,12 @@ namespace PoliceChaser
             }
             else
             {
-                // Drag steering anywhere on the lower half of the screen.
-                if (pointer.Y > 120 && pointer.Y < 208)
+                // Drag steering anywhere on the lower screen, so a slightly missed pad still
+                // turns the car instead of doing nothing.
+                if (pointer.Y > 120)
                 {
                     float centre = VirtualWidth / 2f;
-                    frame.Steer = Math.Clamp((pointer.X - centre) / 90f, -1f, 1f);
+                    frame.Steer = Math.Clamp((pointer.X - centre) / 70f, -1f, 1f);
                 }
             }
         }
@@ -1256,15 +1258,15 @@ namespace PoliceChaser
 
         private Vector2 ToVirtual(Vector2 screen)
         {
-            Rectangle destination = ComputeDestination();
-            if (destination.Width <= 0 || destination.Height <= 0)
-            {
-                return Vector2.Zero;
-            }
+            // MonoGame hands back touches in TouchPanel display space (1280x960 on iOS), which is
+            // not the resolution the picture is drawn at, so undo that scale before hit testing.
+            Rectangle window = Window.ClientBounds;
+            screen = TouchMapping.UndoTouchScale(screen, TouchPanel.DisplayWidth, TouchPanel.DisplayHeight,
+                window.Width, window.Height);
 
-            return new Vector2(
-                (screen.X - destination.X) / (destination.Width / (float)VirtualWidth),
-                (screen.Y - destination.Y) / (destination.Height / (float)VirtualHeight));
+            return TouchMapping.ToLogical(screen,
+                GraphicsDevice.PresentationParameters.BackBufferWidth,
+                GraphicsDevice.PresentationParameters.BackBufferHeight);
         }
 
         // ------------------------------------------------------------------ primitives
