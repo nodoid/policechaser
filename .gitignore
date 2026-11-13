@@ -1,0 +1,31 @@
+# Build output
+bin/
+obj/
+artifacts/
+*.user
+*.suo
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# MonoGame / Xcode generated
+*.mgcontent
+*.mgcb-cache
+DerivedData/
+*.ipa
+*.apk
+*.aab
+*.app/
+!src/PoliceChaser.macOS/*.app/
+
+# Signing material - never commit
+*.p12
+*.mobileprovision
+*.provisionprofile
+*.cer
+*.p8

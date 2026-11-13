@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PoliceChaser.Android/PoliceChaser.Android.csproj" />
+    <Project Path="src/PoliceChaser.Core/PoliceChaser.Core.csproj" />
+    <Project Path="src/PoliceChaser.Desktop/PoliceChaser.Desktop.csproj" />
+    <Project Path="src/PoliceChaser.iOS/PoliceChaser.iOS.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PoliceChaser.Tests/PoliceChaser.Tests.csproj" />
+  </Folder>
+</Solution>
