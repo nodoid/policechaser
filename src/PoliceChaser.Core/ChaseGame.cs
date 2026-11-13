@@ -89,6 +89,7 @@ namespace PoliceChaser
         private float _skyOffset;
         private float _shake;
         private float _lastSpeedRatio;
+        private float _gearFlash;
         private bool _paused;
 
         private InputFrame _input;
@@ -674,6 +675,7 @@ namespace PoliceChaser
 
             _shake = MathF.Max(0f, _shake - dt * 3.5f);
             _crashTimer = MathF.Max(0f, _crashTimer - dt);
+            _gearFlash = MathF.Max(0f, _gearFlash - dt);
 
             if (_countdown > 0f)
             {
@@ -762,6 +764,10 @@ namespace PoliceChaser
                         _shake = 1f;
                         _audio.Play(_audio.Ram, ChipAudio.Mix.Ram);
                         SetRadio("RAMMED HIM! +" + evt.Value);
+                        break;
+                    case RaceEventType.GearChange:
+                        _gearFlash = 0.6f;
+                        _audio.Play(_audio.Select, 0.2f);
                         break;
                     case RaceEventType.TrafficHit:
                         _shake = 1f;
@@ -2341,11 +2347,19 @@ namespace PoliceChaser
             Text("STAGE", 8, 28, stage);
             Text((_campaignIndex + 1) + "/" + Mission.All.Count, 42, 28, stage);
 
-            Text("RANGE", 96, 28, stage);
-            Text(((int)(_race.Gap / 10f)).ToString("D4") + "M", 132, 28, stage);
+            Text("GEAR", 86, 28, stage);
+            Text(_race.GearLabel, 114, 28,
+                _gearFlash > 0f ? new Color(250, 210, 80) : stage);
+
+            Text("RANGE", 150, 28, stage);
+            Text(((int)(_race.Gap / 10f)).ToString("D4") + "M", 186, 28, stage);
 
             // HQ video link: the dispatcher above, the player below, as in the original.
-            Image(_art.HqOperator, 230, 5, 26, 16);
+            bool dispatcherTalking = _radioTimer > 0f;
+            Texture2D dispatcher = dispatcherTalking && ((int)(_time * 9f) & 1) == 0
+                ? _art.HqOperatorTalking
+                : _art.HqOperator;
+            Image(dispatcher, 230, 5, 26, 16);
             Image(_art.PlayerPortrait, 230, 25, 26, 16);
             Text("HQ", 260, 7, new Color(120, 200, 240));
             Text("YOU", 260, 27, new Color(180, 210, 240));
@@ -2647,11 +2661,10 @@ namespace PoliceChaser
 
             Panel(8, 28, 304, 186, new Color(8, 10, 26, 240), new Color(250, 210, 80));
 
-            Text("RK", 16, 34, new Color(140, 150, 185));
-            Text("NAME", 38, 34, new Color(140, 150, 185));
-            Text("SCORE", 116, 34, new Color(140, 150, 185));
-            Text("SKILL", 184, 34, new Color(140, 150, 185));
-            Text("MISSION", 238, 34, new Color(140, 150, 185));
+            Text("RANK", 22, 34, new Color(140, 150, 185));
+            Text("SCORE", 90, 34, new Color(140, 150, 185));
+            Text("STAGE", 172, 34, new Color(140, 150, 185));
+            Text("NAME", 244, 34, new Color(140, 150, 185));
             Rect(14, 44, 292, 1, new Color(60, 70, 110));
 
             HighScoreTable table = _scores.Table;
@@ -2671,11 +2684,10 @@ namespace PoliceChaser
                 }
 
                 Color rankColor = i == 0 ? new Color(250, 210, 80) : i == 1 ? new Color(210, 215, 230) : i == 2 ? new Color(220, 160, 100) : new Color(160, 170, 200);
-                Text((i + 1).ToString("D2"), 18, y, rankColor);
-                Text(entry.Name, 40, y, highlight ? Color.White : new Color(220, 225, 240));
-                Text(entry.Score.ToString("D6"), 116, y, highlight ? new Color(250, 210, 80) : Color.White);
-                Text(entry.DifficultyLabel, 184, y, new Color(160, 190, 230));
-                Text(ShortMission(entry.MissionId), 238, y, new Color(150, 160, 190));
+                Text((i + 1).ToString("D2"), 24, y, rankColor);
+                Text(entry.Score.ToString("D6"), 90, y, highlight ? new Color(250, 210, 80) : Color.White);
+                Text(entry.StageLabel, 172, y, new Color(120, 220, 150));
+                Text(entry.Name, 244, y, highlight ? Color.White : new Color(220, 225, 240));
             }
 
             ScoreEntry highlighted = _highlightIndex >= 0 && _highlightIndex < table.Entries.Count
@@ -2690,21 +2702,5 @@ namespace PoliceChaser
             }
         }
 
-        private static string ShortMission(string id)
-        {
-            switch (id)
-            {
-                case "harbour": return "HARBOUR";
-                case "coast": return "COAST";
-                case "alpine": return "ALPINE";
-                case "neon": return "NEON";
-                case "desert": return "DESERT";
-                case "arctic": return "ARCTIC";
-                case "steelworks": return "STEEL";
-                case "interstate": return "INTERSTATE";
-                case "canyon": return "CANYON";
-                default: return "---";
-            }
-        }
     }
 }

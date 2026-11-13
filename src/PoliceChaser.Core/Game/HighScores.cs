@@ -42,6 +42,21 @@ namespace PoliceChaser.Game
             }
         }
 
+        /// <summary>"ALL" for a cleared campaign, the stage number, or "-" for a legacy entry.</summary>
+        [JsonIgnore]
+        public string StageLabel
+        {
+            get
+            {
+                if (Outcome == "ALL STAGES CLEARED")
+                {
+                    return "ALL";
+                }
+
+                return Stage > 0 ? Stage.ToString() : "-";
+            }
+        }
+
         [JsonIgnore]
         public string MissionLabel =>
             string.IsNullOrEmpty(MissionTitle) ? "---" : MissionTitle;

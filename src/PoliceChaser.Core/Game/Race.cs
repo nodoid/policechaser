@@ -26,6 +26,7 @@ namespace PoliceChaser.Game
         SuspectEscaping,
         Gunfire,
         GunfireWarning,
+        GearChange,
         PlayerHit,
         Wrecked,
         Repaired
@@ -124,6 +125,11 @@ namespace PoliceChaser.Game
 
         /// <summary>Seconds left on the suspect's firing telegraph, 0 when not aiming.</summary>
         public float GunWarning => _gunWarning;
+
+        /// <summary>True once the car has shifted into high gear; the HUD reads LO/HI.</summary>
+        public bool HighGear { get; private set; }
+
+        public string GearLabel => HighGear ? "HI" : "LO";
         public float SpeedRatio => MathF.Min(1.6f, Speed / MaxSpeed);
         public bool OffRoad => MathF.Abs(PlayerX) > OffRoadLimit;
         public bool Escaping => Gap > 15000f;
@@ -255,6 +261,7 @@ namespace PoliceChaser.Game
             }
 
             Speed = Math.Clamp(Speed, 0f, TurboMaxSpeed);
+            UpdateGear();
 
             // ---- lateral physics ------------------------------------------------------
             float curve = Road.CurveAt(PlayerZ);
@@ -410,6 +417,24 @@ namespace PoliceChaser.Game
             if (Speed > MaxSpeed * 0.65f)
             {
                 Turbo = MathF.Min(1f, Turbo + dt * 0.03f);
+            }
+        }
+
+        /// <summary>
+        /// Automatic LO/HI gearbox. The original's HUD shows GEAR LO/HI, so the readout shifts
+        /// at 60% of top speed and drops back below 42% to keep it from fluttering.
+        /// </summary>
+        private void UpdateGear()
+        {
+            if (!HighGear && SpeedRatio >= 0.6f)
+            {
+                HighGear = true;
+                Events.Add(new RaceEvent { Type = RaceEventType.GearChange, Value = 1 });
+            }
+            else if (HighGear && SpeedRatio < 0.42f)
+            {
+                HighGear = false;
+                Events.Add(new RaceEvent { Type = RaceEventType.GearChange, Value = 0 });
             }
         }
 

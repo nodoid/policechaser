@@ -369,6 +369,47 @@ namespace PoliceChaser.Tests
         }
 
         [Fact]
+        public void Gears_shift_up_and_back_down_with_speed()
+        {
+            Race race = NewRace();
+            bool sawUp = false;
+
+            for (int i = 0; i < 60 * 12 && !race.Finished && !race.HighGear; i++)
+            {
+                race.Traffic.Clear();
+                race.Update(1f / 60f, Drive());
+                foreach (RaceEvent evt in race.Events)
+                {
+                    if (evt.Type == RaceEventType.GearChange && evt.Value == 1)
+                    {
+                        sawUp = true;
+                    }
+                }
+            }
+
+            Assert.True(sawUp, "speeding up should shift into high gear (speed=" + race.Speed + ")");
+            Assert.True(race.HighGear);
+            Assert.Equal("HI", race.GearLabel);
+
+            bool sawDown = false;
+            for (int i = 0; i < 60 * 12 && !race.Finished && race.HighGear; i++)
+            {
+                race.Update(1f / 60f, new RaceInput { Brake = true });
+                foreach (RaceEvent evt in race.Events)
+                {
+                    if (evt.Type == RaceEventType.GearChange && evt.Value == 0)
+                    {
+                        sawDown = true;
+                    }
+                }
+            }
+
+            Assert.True(sawDown, "braking should drop back to low gear");
+            Assert.False(race.HighGear);
+            Assert.Equal("LO", race.GearLabel);
+        }
+
+        [Fact]
         public void Armed_fire_warns_before_the_round_lands()
         {
             Race race = new Race(Mission.ById("steelworks"), Difficulty.Beginner, 4321);

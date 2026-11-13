@@ -296,6 +296,7 @@ namespace PoliceChaser.Graphics
         public Texture2D Badge { get; }
         public Texture2D SplashArt { get; }
         public Texture2D HqOperator { get; }
+        public Texture2D HqOperatorTalking { get; }
         public Texture2D PlayerPortrait { get; }
 
         private static readonly Color Blue = new Color(38, 78, 196);
@@ -351,7 +352,8 @@ namespace PoliceChaser.Graphics
 
             Badge = BuildBadge();
             SplashArt = BuildSplashArt();
-            HqOperator = BuildHqOperator();
+            HqOperator = BuildHqOperator(false);
+            HqOperatorTalking = BuildHqOperator(true);
             PlayerPortrait = BuildPlayerPortrait();
         }
 
@@ -692,7 +694,7 @@ namespace PoliceChaser.Graphics
         }
 
         /// <summary>HQ dispatcher at the other end of the radio, in the style of the 8-bit original.</summary>
-        private Texture2D BuildHqOperator()
+        private Texture2D BuildHqOperator(bool talking)
         {
             var canvas = new Canvas(26, 18);
             canvas.Clear(new Color(16, 22, 46));
@@ -713,7 +715,18 @@ namespace PoliceChaser.Graphics
             canvas.FillRect(18, 6, 3, 4, new Color(28, 32, 46));
             canvas.FillRect(9, 12, 6, 1, new Color(28, 32, 46));
             canvas.FillRect(9, 11, 2, 2, new Color(28, 32, 46));
-            canvas.Set(11, 12, new Color(230, 70, 80));
+            canvas.Set(11, 12, talking ? new Color(255, 96, 80) : new Color(150, 50, 60));
+
+            // Mouth opens and closes while she is on the radio.
+            if (talking)
+            {
+                canvas.FillRect(11, 10, 4, 3, new Color(96, 44, 44));
+                canvas.FillRect(12, 10, 2, 1, new Color(242, 236, 230));
+            }
+            else
+            {
+                canvas.FillRect(11, 11, 4, 1, new Color(172, 96, 84));
+            }
 
             // Eyes.
             canvas.Set(10, 8, new Color(28, 34, 52));

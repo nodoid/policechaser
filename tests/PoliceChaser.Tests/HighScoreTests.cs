@@ -106,6 +106,14 @@ namespace PoliceChaser.Tests
         }
 
         [Fact]
+        public void Stage_column_reads_all_for_a_cleared_campaign()
+        {
+            Assert.Equal("7", Entry("AAA", 100, Difficulty.Hard, 7).StageLabel);
+            Assert.Equal("ALL", Entry("AAA", 100, Difficulty.Hard, 9, "ALL STAGES CLEARED").StageLabel);
+            Assert.Equal("-", Entry("AAA", 100).StageLabel);
+        }
+
+        [Fact]
         public void Difficulty_labels_are_present_on_entries()
         {
             var entry = Entry("AAA", 100, Difficulty.Hard);
