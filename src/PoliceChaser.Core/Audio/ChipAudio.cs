@@ -123,33 +123,49 @@ namespace PoliceChaser.Audio
 
         public void StartRaceEngine()
         {
-            if (Engine == null || Siren == null)
+            _engineInstance ??= TryCreateLoop(Engine);
+            if (_engineInstance != null && _engineInstance.State != SoundState.Playing)
             {
-                return;
+                TryPlay(_engineInstance);
             }
 
-            if (_engineInstance == null)
+            _sirenInstance ??= TryCreateLoop(Siren);
+            if (_sirenInstance != null && _sirenInstance.State != SoundState.Playing)
             {
-                _engineInstance = Engine.CreateInstance();
-                _engineInstance.IsLooped = true;
-                _engineInstance.Volume = 0.0f;
+                TryPlay(_sirenInstance);
+            }
+        }
+
+        private static SoundEffectInstance TryCreateLoop(SoundEffect effect)
+        {
+            if (effect == null)
+            {
+                return null;
             }
 
-            if (_engineInstance.State != SoundState.Playing)
+            try
             {
-                _engineInstance.Play();
+                SoundEffectInstance instance = effect.CreateInstance();
+                instance.IsLooped = true;
+                instance.Volume = 0.0f;
+                return instance;
             }
-
-            if (_sirenInstance == null)
+            catch (Exception)
             {
-                _sirenInstance = Siren.CreateInstance();
-                _sirenInstance.IsLooped = true;
-                _sirenInstance.Volume = 0.0f;
+                // No free hardware voice (InstancePlayLimitException): run without this loop.
+                return null;
             }
+        }
 
-            if (_sirenInstance.State != SoundState.Playing)
+        private static void TryPlay(SoundEffectInstance instance)
+        {
+            try
             {
-                _sirenInstance.Play();
+                instance.Play();
+            }
+            catch (Exception)
+            {
+                // Never let a missing audio voice take the game down.
             }
         }
 
@@ -172,8 +188,36 @@ namespace PoliceChaser.Audio
 
         public void StopRaceAudio()
         {
-            _engineInstance?.Stop();
-            _sirenInstance?.Stop();
+            // Stopping is not enough on iOS: a stopped loop keeps its hardware voice, and the
+            // game-over music then failed to start with InstancePlayLimitException.
+            DisposeLoop(ref _engineInstance);
+            DisposeLoop(ref _sirenInstance);
+        }
+
+        private static void DisposeLoop(ref SoundEffectInstance instance)
+        {
+            SoundEffectInstance old = instance;
+            instance = null;
+            if (old == null)
+            {
+                return;
+            }
+
+            try
+            {
+                old.Stop();
+            }
+            catch (Exception)
+            {
+            }
+
+            try
+            {
+                old.Dispose();
+            }
+            catch (Exception)
+            {
+            }
         }
 
         public void PauseRaceAudio(bool paused)
@@ -187,12 +231,12 @@ namespace PoliceChaser.Audio
             {
                 if (_engineInstance?.State == SoundState.Paused)
                 {
-                    _engineInstance.Resume();
+                    TryResume(_engineInstance);
                 }
 
                 if (_sirenInstance?.State == SoundState.Paused)
                 {
-                    _sirenInstance.Resume();
+                    TryResume(_sirenInstance);
                 }
             }
         }
@@ -212,11 +256,45 @@ namespace PoliceChaser.Audio
                 return;
             }
 
-            _musicInstance = effect.CreateInstance();
-            _musicInstance.IsLooped = loop;
-            _musicInstance.Volume = Mix.Music * MusicVolume;
-            _musicInstance.Play();
-            _currentMusic = name;
+            SoundEffectInstance music = null;
+            try
+            {
+                music = effect.CreateInstance();
+                music.IsLooped = loop;
+                music.Volume = Mix.Music * MusicVolume;
+                music.Play();
+                _musicInstance = music;
+                _currentMusic = name;
+            }
+            catch (Exception)
+            {
+                // Hardware voice limit reached (common once a wreck piles up effects): skip the
+                // track rather than tearing the game down.
+                if (music != null)
+                {
+                    try
+                    {
+                        music.Dispose();
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
+
+                _musicInstance = null;
+                _currentMusic = null;
+            }
+        }
+
+        private static void TryResume(SoundEffectInstance instance)
+        {
+            try
+            {
+                instance.Resume();
+            }
+            catch (Exception)
+            {
+            }
         }
 
         /// <summary>Re-applies the music setting to the loop that is already playing.</summary>

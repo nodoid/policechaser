@@ -29,6 +29,14 @@ namespace PoliceChaser.iOS
 
             _game = new ChaseGame();
 
+            // Diagnostics hook: set PC_SELFTEST=wreck (or race, gameover, ...) in the launch
+            // environment to drive one screen automatically. Inert in normal play.
+            string selfTest = Environment.GetEnvironmentVariable("PC_SELFTEST");
+            if (!string.IsNullOrEmpty(selfTest))
+            {
+                _game.EnableSelfTest(selfTest, 150, "selftest.png");
+            }
+
             // MonoGame's iOS platform registers the UIKit window it created, which lets us
             // move it onto the scene instead of letting it float unattached.
             MainWindow = _game.Services.GetService(typeof(UIWindow)) as UIWindow;

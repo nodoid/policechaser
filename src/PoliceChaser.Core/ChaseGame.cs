@@ -227,6 +227,35 @@ namespace PoliceChaser
 
         protected override void Update(GameTime gameTime)
         {
+            try
+            {
+                UpdateFrame(gameTime);
+            }
+            catch (Exception ex)
+            {
+                WriteCrash("Update", ex);
+                throw;
+            }
+        }
+
+        /// <summary>Writes the exception to the app data folder so device crashes can be read back.</summary>
+        private void WriteCrash(string where, Exception ex)
+        {
+            try
+            {
+                string root = LocalHighScoreFile.DefaultRoot;
+                System.IO.Directory.CreateDirectory(root);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(root, "policechaser-crash.txt"),
+                    DateTime.UtcNow.ToString("u") + " " + where + Environment.NewLine + ex);
+            }
+            catch (Exception)
+            {
+                // Diagnostics must never mask the original failure.
+            }
+        }
+
+        private void UpdateFrame(GameTime gameTime)
+        {
             float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
             if (dt > 0.1f)
             {
@@ -1190,7 +1219,7 @@ namespace PoliceChaser
                     _missionCursor = 0;
                     StartCampaign();
                     _countdown = 0f;
-                    for (int i = 0; i < 60 * 150 && !_race.Finished; i++)
+                    for (int i = 0; i < 60 * 180 && _screen == GameScreen.Racing; i++)
                     {
                         TrafficCar nearest = null;
                         float best = float.MaxValue;
@@ -1204,15 +1233,15 @@ namespace PoliceChaser
                             }
                         }
 
-                        float steer = nearest != null
+                        _input.Steer = nearest != null
                             ? Math.Clamp((nearest.X - _race.PlayerX) * 3f, -1f, 1f)
                             : 0f;
-                        _race.Update(1f / 60f,
-                            new RaceInput { Accelerate = true, Turbo = true, Steer = steer });
+                        _input.Turbo = true;
+                        _input.Brake = false;
+                        UpdateRacing(1f / 60f);
+                        _audio.UpdateRaceAudio(_lastSpeedRatio, _race.OffRoad, false, true);
                     }
 
-                    _campaignRaw = _race?.RawScore ?? 0;
-                    SetScreen(GameScreen.GameOver);
                     break;
                 case "crash":
                     _PointerSeen = true;
@@ -1497,16 +1526,30 @@ namespace PoliceChaser
             int height = GraphicsDevice.PresentationParameters.BackBufferHeight;
             var data = new Color[width * height];
 
+            // A bare file name goes to the writable app data folder; the app bundle is read-only
+            // on iOS. Absolute paths keep working (the desktop harness uses /tmp).
+            string path = System.IO.Path.IsPathRooted(_selfTestPath)
+                ? _selfTestPath
+                : System.IO.Path.Combine(LocalHighScoreFile.DefaultRoot, _selfTestPath);
+
             try
             {
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path) ?? LocalHighScoreFile.DefaultRoot);
                 GraphicsDevice.GetBackBufferData(data);
-                PngWriter.Write(_selfTestPath, width, height, data);
-                File.WriteAllText(_selfTestPath + ".txt",
+                PngWriter.Write(path, width, height, data);
+                File.WriteAllText(path + ".txt",
                     "screen=" + _screen + " size=" + width + "x" + height + Environment.NewLine);
             }
             catch (Exception ex)
             {
-                File.WriteAllText(_selfTestPath + ".txt", "FAILED: " + ex.Message + Environment.NewLine);
+                try
+                {
+                    File.WriteAllText(path + ".txt", "FAILED: " + ex.Message + Environment.NewLine);
+                }
+                catch (Exception)
+                {
+                    // Nothing writable to report into.
+                }
             }
 
 #if !IOS
@@ -1675,6 +1718,19 @@ namespace PoliceChaser
         // ===================================================================== draw
 
         protected override void Draw(GameTime gameTime)
+        {
+            try
+            {
+                DrawFrame(gameTime);
+            }
+            catch (Exception ex)
+            {
+                WriteCrash("Draw", ex);
+                throw;
+            }
+        }
+
+        private void DrawFrame(GameTime gameTime)
         {
             GraphicsDevice.SetRenderTarget(_target);
             GraphicsDevice.Clear(Color.Black);
