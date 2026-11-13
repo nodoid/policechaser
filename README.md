@@ -3,8 +3,12 @@
 An original 8-bit-style police pursuit racer for **Android (API 32), iOS 18+, macOS 26+ and
 Windows 11**, built with MonoGame and .NET 10. It is a faithful interpretation of the
 128K ZX Spectrum chase format - rear-view pursuit, a suspect car you have to ram, a burning
-clock, checkpoints, traffic and a radio - with new graphics and sound, six missions, three
-skill levels and a persistent high score table.
+clock, checkpoints, traffic and a radio - with smooth high-resolution graphics, new sound,
+nine missions across two series, three skill levels and a persistent high score table.
+
+All art is baked at 4x and the game renders to a 1280x960 target that is smoothly scaled to
+the window or device, so it is not an upscaled 320x240 picture: text, road, scenery and cars
+are all drawn at full resolution on every platform.
 
 No artwork, code, music or data from any commercial game is included. Every sprite, sound,
 music track, the logo and the app icon are generated procedurally by the game at runtime or
@@ -37,7 +41,9 @@ has to be five times as good as a Beginner run to top the table.
 
 ### Missions
 
-Six pursuits, in campaign order:
+Nine pursuits in two series.
+
+**Series I**
 
 1. **Harbour Pursuit** - docks, night city
 2. **Sunset Boulevard** - coast road
@@ -46,7 +52,16 @@ Six pursuits, in campaign order:
 5. **Dune Runner** - salt flats in a sandstorm *(new mission)*
 6. **Frostline** - blizzard border run *(new mission)*
 
+**Series II** - an original sequel tour, not a copy of any later game *(all new)*
+
+7. **Ironworks** - rain over the old foundry, armed gun runner
+8. **Interstate 9** - state-line highway, armed armoured-car crew
+9. **Red Canyon** - desert rim in a sandstorm, armed kidnapper
+
 Each mission has its own palette, scenery set, weather, suspect and traffic density.
+Series II suspects **shoot back** once you are in range. Their fire costs you speed and
+time, and three hits wreck your car and end the run, so weaving across the road genuinely
+helps. The HUD shows a green hull bar on those missions.
 
 ## High scores
 
@@ -117,8 +132,9 @@ dotnet test tests/PoliceChaser.Tests
 ```
 
 The xunit suite covers the race simulation (acceleration, clock drain, off-road handling,
-turbo, ramming, traffic spawning), the difficulty weighting (1x / 2x / 5x), mission data and
-high score ordering, truncation, persistence and corruption recovery.
+turbo, ramming, traffic spawning, Series II gunfire and hull damage), the difficulty weighting
+(1x / 2x / 5x), mission and series data, and high score ordering, truncation, persistence and
+corruption recovery.
 
 ## Smoke tests / screenshots
 
@@ -129,8 +145,8 @@ build on macOS and inside the Windows VM:
 dotnet run --project src/PoliceChaser.Desktop -- --selftest race --frames 200 --shot shot.png
 ```
 
-Screens: `splash`, `title`, `difficulty`, `mission`, `briefing`, `race`, `race2`, `busted`,
-`gameover`, `name`, `scores`.
+Screens: `splash`, `title`, `difficulty`, `mission`, `briefing`, `briefing2`, `race`, `race2`,
+`race3`, `busted`, `gameover`, `name`, `scores`.
 
 ## Layout
 

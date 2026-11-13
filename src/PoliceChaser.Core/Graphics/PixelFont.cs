@@ -6,16 +6,18 @@ using Microsoft.Xna.Framework.Graphics;
 namespace PoliceChaser.Graphics
 {
     /// <summary>
-    /// A 5x7 pixel font baked into one small atlas at startup. Keeping the font procedural means
-    /// there is no content pipeline to run for any of the four platforms.
+    /// A 5x7 pixel font baked into one atlas at startup. The atlas is rendered at the game's
+    /// high resolution scale, so text stays crisp instead of being upscaled from 320x240.
     /// </summary>
     public sealed class PixelFont
     {
         public const int GlyphWidth = 5;
         public const int GlyphHeight = 7;
         public const int Advance = 6;
-        private const int Cell = 8;
         private const int Columns = 16;
+
+        private static int Scale => RenderSettings.Scale;
+        private static int Cell => 8 * Scale;
 
         private static readonly Dictionary<char, byte[]> Glyphs = new Dictionary<char, byte[]>
         {
@@ -81,7 +83,6 @@ namespace PoliceChaser.Graphics
         private readonly List<char> _order = new List<char>();
 
         public Texture2D Atlas { get; }
-        public int CellSize => Cell;
 
         public PixelFont(GraphicsDevice device)
         {
@@ -91,30 +92,41 @@ namespace PoliceChaser.Graphics
                 _order.Add(pair.Key);
             }
 
+            int cell = Cell;
             int rows = (_order.Count + Columns - 1) / Columns;
-            var data = new Color[Columns * Cell * rows * Cell];
+            var data = new Color[Columns * cell * rows * cell];
             var glyphColor = new Color(255, 255, 255, 255);
 
             for (int g = 0; g < _order.Count; g++)
             {
-                byte[] rowsData = Glyphs[_order[g]];
-                int cx = (g % Columns) * Cell;
-                int cy = (g / Columns) * Cell;
+                byte[] glyph = Glyphs[_order[g]];
+                int cx = (g % Columns) * cell;
+                int cy = (g / Columns) * cell;
 
                 for (int y = 0; y < GlyphHeight; y++)
                 {
-                    int bits = rowsData[y];
+                    int bits = glyph[y];
                     for (int x = 0; x < GlyphWidth; x++)
                     {
-                        if ((bits & (1 << (GlyphWidth - 1 - x))) != 0)
+                        if ((bits & (1 << (GlyphWidth - 1 - x))) == 0)
                         {
-                            data[(cy + y) * Columns * Cell + cx + x] = glyphColor;
+                            continue;
+                        }
+
+                        for (int dy = 0; dy < Scale; dy++)
+                        {
+                            for (int dx = 0; dx < Scale; dx++)
+                            {
+                                int px = cx + x * Scale + dx;
+                                int py = cy + y * Scale + dy;
+                                data[py * Columns * cell + px] = glyphColor;
+                            }
                         }
                     }
                 }
             }
 
-            Atlas = new Texture2D(device, Columns * Cell, rows * Cell);
+            Atlas = new Texture2D(device, Columns * cell, rows * cell);
             Atlas.SetData(data);
         }
 
@@ -128,6 +140,7 @@ namespace PoliceChaser.Graphics
             return text.Length * Advance * scale - scale;
         }
 
+        /// <summary>Draws text at a logical (320x240 layout) position with integer scaling.</summary>
         public void Draw(SpriteBatch batch, string text, int x, int y, Color color, int scale = 1)
         {
             if (string.IsNullOrEmpty(text) || scale <= 0)
@@ -135,29 +148,33 @@ namespace PoliceChaser.Graphics
                 return;
             }
 
-            int cursor = x;
+            int cell = Cell;
+            int unit = Scale * scale;
+            int cursor = x * Scale;
+            int lineY = y * Scale;
+
             for (int i = 0; i < text.Length; i++)
             {
                 char c = char.ToUpperInvariant(text[i]);
                 if (c == '\n')
                 {
-                    cursor = x;
-                    y += (GlyphHeight + 3) * scale;
+                    cursor = x * Scale;
+                    lineY += (GlyphHeight + 3) * scale * Scale;
                     continue;
                 }
 
                 if (_index.TryGetValue(c, out int index))
                 {
-                    int sx = (index % Columns) * Cell;
-                    int sy = (index / Columns) * Cell;
+                    int sx = (index % Columns) * cell;
+                    int sy = (index / Columns) * cell;
                     batch.Draw(
                         Atlas,
-                        new Rectangle(cursor, y, GlyphWidth * scale, GlyphHeight * scale),
-                        new Rectangle(sx, sy, GlyphWidth, GlyphHeight),
+                        new Rectangle(cursor, lineY, GlyphWidth * unit, GlyphHeight * unit),
+                        new Rectangle(sx, sy, GlyphWidth * Scale, GlyphHeight * Scale),
                         color);
                 }
 
-                cursor += Advance * scale;
+                cursor += Advance * scale * Scale;
             }
         }
 

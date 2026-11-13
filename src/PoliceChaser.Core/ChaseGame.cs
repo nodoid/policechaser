@@ -30,13 +30,14 @@ namespace PoliceChaser
     }
 
     /// <summary>
-    /// The whole game. Presentation is drawn to a 320x240 render target and scaled up with point
-    /// sampling, which keeps the chunky 8-bit look at any resolution and on any platform.
+    /// The whole game. Art is baked at 4x and drawn to a 1280x960 render target that is smoothly
+    /// scaled to fit any window or device, so the presentation is high resolution everywhere.
     /// </summary>
     public sealed class ChaseGame : Microsoft.Xna.Framework.Game
     {
-        public const int VirtualWidth = RoadRenderer.ScreenWidth;
-        public const int VirtualHeight = RoadRenderer.ScreenHeight;
+        public const int VirtualWidth = RenderSettings.LogicalWidth;
+        public const int VirtualHeight = RenderSettings.LogicalHeight;
+        private const int S = RenderSettings.Scale;
 
 #if ANDROID || IOS
         private const bool MobilePlatform = true;
@@ -142,7 +143,7 @@ namespace PoliceChaser
         protected override void LoadContent()
         {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
-            _target = new RenderTarget2D(GraphicsDevice, VirtualWidth, VirtualHeight, false,
+            _target = new RenderTarget2D(GraphicsDevice, RenderSettings.Width, RenderSettings.Height, false,
                 SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
 
             _white = new Texture2D(GraphicsDevice, 1, 1);
@@ -411,7 +412,7 @@ namespace PoliceChaser
                 _audio.Play(_audio.Select);
             }
 
-            if (_input.Down && _missionCursor < 3)
+            if (_input.Down && _missionCursor + 3 < Mission.All.Count)
             {
                 _missionCursor += 3;
                 _audio.Play(_audio.Select);
@@ -551,6 +552,17 @@ namespace PoliceChaser
                     SetScreen(GameScreen.GameOver);
                 }
             }
+            else if (_race.Wrecked)
+            {
+                _raceEndTimer += dt;
+                if (_raceEndTimer > 2.2f)
+                {
+                    _campaignRaw += _race.RawScore;
+                    _raceEndTimer = 0f;
+                    _audio.StopRaceAudio();
+                    SetScreen(GameScreen.GameOver);
+                }
+            }
             else
             {
                 _raceEndTimer = 0f;
@@ -587,6 +599,21 @@ namespace PoliceChaser
                     case RaceEventType.SuspectEscaping:
                         _audio.Play(_audio.Wrong, 0.6f);
                         SetRadio("SUSPECT ESCAPING!");
+                        break;
+                    case RaceEventType.Gunfire:
+                        _shake = MathF.Max(_shake, 0.5f);
+                        _audio.Play(_audio.Crash, 0.35f);
+                        SetRadio("SUSPECT IS SHOOTING!");
+                        break;
+                    case RaceEventType.PlayerHit:
+                        _shake = 1f;
+                        _audio.Play(_audio.Crash, 0.8f);
+                        SetRadio("TAKING FIRE! HULL " + evt.Value);
+                        break;
+                    case RaceEventType.Wrecked:
+                        _shake = 1f;
+                        _audio.Play(_audio.Crash, 1f);
+                        SetRadio("CAR WRECKED");
                         break;
                     case RaceEventType.NearMiss:
                         break;
@@ -799,6 +826,17 @@ namespace PoliceChaser
                     _difficulty = Difficulty.Medium;
                     StartCampaign();
                     _countdown = 0f;
+                    break;
+                case "race3":
+                    _missionCursor = 6;
+                    _difficulty = Difficulty.Beginner;
+                    StartCampaign();
+                    _countdown = 0f;
+                    break;
+                case "briefing2":
+                    _missionCursor = 6;
+                    _mission = Mission.All[6];
+                    SetScreen(GameScreen.Briefing);
                     break;
                 case "busted":
                     _missionCursor = 0;
@@ -1056,7 +1094,7 @@ namespace PoliceChaser
             GraphicsDevice.SetRenderTarget(_target);
             GraphicsDevice.Clear(Color.Black);
 
-            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
+            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
                 DepthStencilState.None, RasterizerState.CullNone);
 
             switch (_screen)
@@ -1108,7 +1146,7 @@ namespace PoliceChaser
             GraphicsDevice.Clear(new Color(4, 4, 10));
 
             Rectangle destination = ComputeDestination();
-            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.PointClamp,
+            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.LinearClamp,
                 DepthStencilState.None, RasterizerState.CullNone);
             _spriteBatch.Draw(_target, destination, Color.White);
             _spriteBatch.End();
@@ -1134,9 +1172,9 @@ namespace PoliceChaser
                 return new Rectangle(0, 0, VirtualWidth, VirtualHeight);
             }
 
-            float scale = MathF.Min(width / (float)VirtualWidth, height / (float)VirtualHeight);
-            int w = (int)(VirtualWidth * scale);
-            int h = (int)(VirtualHeight * scale);
+            float scale = MathF.Min(width / (float)RenderSettings.Width, height / (float)RenderSettings.Height);
+            int w = (int)(RenderSettings.Width * scale);
+            int h = (int)(RenderSettings.Height * scale);
             return new Rectangle((width - w) / 2, (height - h) / 2, w, h);
         }
 
@@ -1157,7 +1195,13 @@ namespace PoliceChaser
 
         private void Rect(int x, int y, int w, int h, Color color)
         {
-            _spriteBatch.Draw(_white, new Rectangle(x, y, w, h), color);
+            _spriteBatch.Draw(_white, new Rectangle(x * S, y * S, w * S, h * S), color);
+        }
+
+        /// <summary>Draws a baked texture using logical (320x240) coordinates.</summary>
+        private void Image(Texture2D texture, int x, int y, int w, int h, Color? tint = null)
+        {
+            _spriteBatch.Draw(texture, new Rectangle(x * S, y * S, w * S, h * S), tint ?? Color.White);
         }
 
         private void Panel(int x, int y, int w, int h, Color fill, Color border)
@@ -1177,6 +1221,43 @@ namespace PoliceChaser
         private void TextCentered(string text, int centerX, int y, Color color, int scale = 1)
         {
             _font.DrawCentered(_spriteBatch, text, centerX, y, color, scale);
+        }
+
+        /// <summary>Draws text word-wrapped to a character budget, one line per 10 logical pixels.</summary>
+        private void TextWrapped(string text, int x, int y, int maxChars, Color color, int lineHeight = 10)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            int start = 0;
+            int line = 0;
+            while (start < text.Length)
+            {
+                int length = Math.Min(maxChars, text.Length - start);
+                if (start + length < text.Length)
+                {
+                    int cut = text.LastIndexOf(' ', Math.Min(text.Length - 1, start + length - 1), length);
+                    if (cut > start)
+                    {
+                        length = cut - start;
+                    }
+                }
+
+                Text(text.Substring(start, length).Trim(), x, y + line * lineHeight, color);
+                start += length;
+                while (start < text.Length && text[start] == ' ')
+                {
+                    start++;
+                }
+
+                line++;
+                if (line > 4)
+                {
+                    break;
+                }
+            }
         }
 
         private void TextShadow(string text, int centerX, int y, Color color, int scale = 1)
@@ -1226,7 +1307,7 @@ namespace PoliceChaser
             Background(MissionTheme.Harbour);
             Rect(0, 0, VirtualWidth, VirtualHeight, new Color(6, 8, 20, 235));
 
-            _spriteBatch.Draw(_art.SplashArt, new Rectangle(80, 36, 160, 96), Color.White);
+            Image(_art.SplashArt, 80, 36, 160, 96);
             SirenStrip(0);
 
             TextShadow("POLICE", 160, 132, new Color(250, 250, 255), 4);
@@ -1255,8 +1336,8 @@ namespace PoliceChaser
                 Rect(0, y, VirtualWidth, 1, Color.Lerp(palette.SkyTop, palette.SkyBottom, t * t));
             }
 
-            _spriteBatch.Draw(_art.Sun(MissionTheme.Neon), new Rectangle(226, 22, 52, 52), Color.White);
-            _spriteBatch.Draw(_art.Skyline(MissionTheme.Neon, false), new Rectangle(0, 54, 320, 96), Color.White * 0.9f);
+            Image(_art.Sun(MissionTheme.Neon), 240, 8, 48, 48);
+            Image(_art.Skyline(MissionTheme.Neon, false), 0, 54, 320, 96, Color.White * 0.9f);
 
             for (int i = 0; i < 10; i++)
             {
@@ -1265,15 +1346,15 @@ namespace PoliceChaser
 
             SirenStrip(0);
 
-            _spriteBatch.Draw(_art.Badge, new Rectangle(6, 8, 26, 30), Color.White);
-            _spriteBatch.Draw(_art.Badge, new Rectangle(288, 8, 26, 30), Color.White);
+            Image(_art.Badge, 6, 8, 26, 30);
+            Image(_art.Badge, 288, 8, 26, 30);
 
             TextShadow("POLICE", 160, 40, new Color(250, 250, 255), 4);
             TextShadow("CHASER", 160, 70, new Color(250, 210, 80), 4);
 
             Panel(44, 112, 232, 40, new Color(8, 10, 26, 220), new Color(250, 210, 80));
-            TextCentered("SIX MISSIONS - THREE SKILL LEVELS", 160, 118, new Color(160, 220, 255));
-            TextCentered("THREE OF THEM BRAND NEW", 160, 132, new Color(250, 140, 140));
+            TextCentered("NINE MISSIONS - THREE SKILL LEVELS", 160, 118, new Color(160, 220, 255));
+            TextCentered("SERIES II: ARMED SUSPECTS", 160, 132, new Color(250, 140, 140));
 
             if (Blink(2.2f))
             {
@@ -1294,19 +1375,19 @@ namespace PoliceChaser
 
             Panel(202, 174, 112, 30, new Color(8, 10, 26, 210), new Color(80, 90, 130));
             Text("HIGH SCORES", 214, 180, new Color(190, 200, 230));
-            Text("TAP OR PRESS FIRE", 214, 192, new Color(130, 145, 180));
+            Text("VIEW TABLE", 214, 192, new Color(130, 145, 180));
         }
 
         // ------------------------------------------------------------------ menus
 
         private Rectangle[] MissionCards()
         {
-            var cards = new Rectangle[6];
-            for (int i = 0; i < 6; i++)
+            var cards = new Rectangle[Mission.All.Count];
+            for (int i = 0; i < cards.Length; i++)
             {
                 int col = i % 3;
                 int row = i / 3;
-                cards[i] = new Rectangle(10 + col * 102, 50 + row * 66, 96, 58);
+                cards[i] = new Rectangle(6 + col * 104, 42 + row * 41, 100, 37);
             }
 
             return cards;
@@ -1351,8 +1432,8 @@ namespace PoliceChaser
             Background(MissionTheme.Harbour);
             SirenStrip(0);
 
-            TextShadow("SELECT MISSION", 160, 16, Color.White, 2);
-            Text("SKILL: " + DifficultyRules.Name(_difficulty), 8, 36, new Color(250, 210, 80));
+            TextShadow("SELECT MISSION", 160, 8, Color.White, 2);
+            Text("SKILL: " + DifficultyRules.Name(_difficulty), 8, 28, new Color(250, 210, 80));
 
             Rectangle[] cards = MissionCards();
             for (int i = 0; i < cards.Length; i++)
@@ -1360,36 +1441,48 @@ namespace PoliceChaser
                 Mission mission = Mission.All[i];
                 ThemePalette palette = _art.Palette(mission.Theme);
                 bool selected = i == _missionCursor;
+                Rectangle card = cards[i];
 
-                Panel(cards[i].X, cards[i].Y, cards[i].Width, cards[i].Height,
-                    Color.Lerp(palette.BuildingDark, new Color(6, 8, 20), 0.3f),
+                Panel(card.X, card.Y, card.Width, card.Height,
+                    Color.Lerp(palette.BuildingDark, new Color(6, 8, 20), 0.35f),
                     selected ? new Color(250, 210, 80) : new Color(70, 80, 110));
 
-                Rect(cards[i].X + 4, cards[i].Y + 4, cards[i].Width - 8, 12, palette.RumbleLight);
-                Text((i + 1).ToString(), cards[i].X + 7, cards[i].Y + 6, new Color(20, 24, 40));
-
-                string title = mission.Title;
-                TextCentered(title, cards[i].X + cards[i].Width / 2, cards[i].Y + 20, Color.White, 1);
+                Rect(card.X + 3, card.Y + 3, 14, 10, palette.RumbleLight);
+                Text((i + 1).ToString(), card.X + 6, card.Y + 5, new Color(20, 24, 40));
 
                 if (mission.IsNewMission)
                 {
-                    Rect(cards[i].X + cards[i].Width - 30, cards[i].Y + 20, 26, 10, new Color(220, 60, 70));
-                    TextCentered("NEW", cards[i].X + cards[i].Width - 17, cards[i].Y + 22, Color.White);
+                    bool series2 = mission.Series == 2;
+                    int badgeWidth = series2 ? 16 : 26;
+                    Rect(card.X + card.Width - badgeWidth - 3, card.Y + 3, badgeWidth, 10,
+                        series2 ? new Color(250, 180, 60) : new Color(220, 60, 70));
+                    TextCentered(series2 ? "II" : "NEW", card.X + card.Width - badgeWidth / 2 - 3, card.Y + 5,
+                        series2 ? new Color(30, 20, 8) : Color.White);
                 }
 
-                TextCentered(ThemeLabel(mission.Theme), cards[i].X + cards[i].Width / 2, cards[i].Y + 44,
-                    new Color(190, 200, 220), 1);
+                TextCentered(CardTitle(mission), card.X + card.Width / 2, card.Y + 16, Color.White);
+                TextCentered(ThemeLabel(mission.Theme), card.X + card.Width / 2, card.Y + 26,
+                    new Color(170, 182, 210));
             }
 
             Mission current = Mission.All[_missionCursor];
-            Panel(10, 188, 300, 40, new Color(6, 8, 20, 225), new Color(60, 70, 110));
-            Text(current.Tagline, 16, 193, new Color(200, 210, 235), 1);
+            Panel(6, 164, 308, 62, new Color(6, 8, 20, 228), new Color(60, 70, 110));
+            Text(current.Tagline, 12, 168, new Color(200, 210, 235));
             string detail = "SUSPECT " + current.SuspectName + " - " + current.SuspectCrime;
-            Text(detail, 16, 206, new Color(250, 210, 80), 1);
-            Text("RAMS NEEDED " + current.RequiredRams + "   TIME " + (int)current.BaseTimeSeconds + "S",
-                16, 218, new Color(150, 170, 210), 1);
+            Text(detail, 12, 180, new Color(250, 210, 80));
+            Text("RAMS " + current.RequiredRams + "   TIME " + (int)current.BaseTimeSeconds + "S",
+                12, 192, new Color(150, 170, 210));
+            Text(current.SuspectArmed ? "SERIES II - ARMED SUSPECT - HULL AT RISK" : "SERIES I - TRAFFIC AND TIME ONLY",
+                12, 204, current.SuspectArmed ? new Color(255, 120, 120) : new Color(150, 170, 210));
 
             TextCentered("ARROWS TO CHOOSE - FIRE TO START", 160, 232, new Color(90, 100, 130));
+        }
+
+        private static string CardTitle(Mission mission)
+        {
+            string title = mission.Title;
+            int space = title.IndexOf(' ');
+            return space > 0 ? title.Substring(0, space) : title;
         }
 
         private static string ThemeLabel(MissionTheme theme)
@@ -1401,6 +1494,9 @@ namespace PoliceChaser
                 case MissionTheme.Neon: return "NIGHT CITY";
                 case MissionTheme.Desert: return "SALT FLATS";
                 case MissionTheme.Arctic: return "BLIZZARD";
+                case MissionTheme.Industrial: return "FOUNDRY";
+                case MissionTheme.Highway: return "INTERSTATE";
+                case MissionTheme.Canyon: return "RED ROCK";
                 default: return "DOCKS";
             }
         }
@@ -1412,10 +1508,10 @@ namespace PoliceChaser
 
             Panel(16, 22, 288, 172, new Color(8, 10, 26, 235), new Color(250, 210, 80));
 
-            TextCentered("PURSUIT BRIEFING", 160, 30, new Color(250, 210, 80));
-            TextCentered(_mission.Title, 160, 46, Color.White, 2);
+            TextCentered("PURSUIT BRIEFING", 160, 28, new Color(250, 210, 80));
+            TextCentered(_mission.Title, 160, 42, Color.White, 2);
 
-            Text(_mission.Tagline, 26, 70, new Color(180, 195, 230), 1);
+            TextWrapped(_mission.Tagline, 26, 64, 46, new Color(180, 195, 230));
 
             Text("SUSPECT:", 26, 90, new Color(140, 150, 185));
             Text(_mission.SuspectName, 86, 90, new Color(255, 140, 140), 2);
@@ -1426,16 +1522,21 @@ namespace PoliceChaser
             Text("RAM " + _mission.RequiredRams + " TIMES TO STOP THE CAR", 86, 122, new Color(200, 210, 235));
 
             Text("SKILL:", 26, 138, new Color(140, 150, 185));
-            Text(DifficultyRules.Name(_difficulty) + " (" + DifficultyRules.Blurb(_difficulty) + ")", 86, 138,
-                new Color(250, 210, 80));
+            Text(DifficultyRules.Name(_difficulty), 86, 138, new Color(250, 210, 80));
 
             Text("TIME:", 26, 154, new Color(140, 150, 185));
             Text((int)DifficultyRules.BaseTime(_difficulty, _mission.BaseTimeSeconds) + " SECONDS", 86, 154,
                 new Color(200, 210, 235));
 
+            if (_mission.SuspectArmed)
+            {
+                Text("WARNING:", 26, 170, new Color(255, 120, 120));
+                Text("SUSPECT IS ARMED - HULL AT RISK", 86, 170, new Color(255, 160, 160));
+            }
+
             if (Blink(2f))
             {
-                TextCentered("FIRE TO DEPLOY", 160, 180, Color.White);
+                TextCentered("FIRE TO DEPLOY", 160, 182, Color.White);
             }
 
             Rect(0, 200, VirtualWidth, 24, new Color(10, 12, 24));
@@ -1454,7 +1555,7 @@ namespace PoliceChaser
 
             ThemePalette palette = _art.Palette(_mission.Theme);
 
-            float shakeAmount = _shake * 3f + (_race.OffRoad ? 1.4f : 0f);
+            float shakeAmount = (_shake * 3f + (_race.OffRoad ? 1.4f : 0f)) * S;
             float shakeX = MathF.Sin(_time * 90f) * shakeAmount;
             float shakeY = MathF.Cos(_time * 73f) * shakeAmount * 0.6f;
 
@@ -1492,22 +1593,24 @@ namespace PoliceChaser
 
         private void DrawPlayerCar(float shakeX, float shakeY)
         {
-            int baseY = RoadRenderer.ViewBottom - 44;
-            int lean = (int)(_input.Steer * 4f);
-            int bump = (int)(MathF.Sin(_time * 18f) * 1.2f * Math.Clamp(_race.SpeedRatio, 0f, 1f));
+            int baseY = 164 * S;
+            int lean = (int)(_input.Steer * 4f) * S;
+            int bump = (int)(MathF.Sin(_time * 18f) * 1.2f * Math.Clamp(_race.SpeedRatio, 0f, 1f) * S);
 
-            Texture2D car = lean < -1 ? _art.PlayerCarLeft : lean > 1 ? _art.PlayerCarRight : _art.PlayerCar;
-            int x = 160 - car.Width / 2 + lean + (int)(shakeX * 0.6f);
+            Texture2D car = _input.Steer < -0.2f ? _art.PlayerCarLeft
+                          : _input.Steer > 0.2f ? _art.PlayerCarRight
+                          : _art.PlayerCar;
+            int x = 160 * S - car.Width / 2 + lean + (int)(shakeX * 0.6f);
             int y = baseY + bump + (int)(shakeY * 0.6f);
 
-            _spriteBatch.Draw(_art.Shadow, new Rectangle(x + 4, y + 34, 56, 12), Color.White);
+            _spriteBatch.Draw(_art.Shadow, new Rectangle(x + 4 * S, y + 34 * S, 56 * S, 12 * S), Color.White);
             _spriteBatch.Draw(car, new Rectangle(x, y, car.Width, car.Height), Color.White);
 
             // Brake lights glow.
             if (_input.Brake)
             {
-                Rect(x + 8, y + 18, 10, 4, new Color(255, 90, 90, 180));
-                Rect(x + 46, y + 18, 10, 4, new Color(255, 90, 90, 180));
+                _spriteBatch.Draw(_white, new Rectangle(x + 8 * S, y + 18 * S, 10 * S, 4 * S), new Color(255, 90, 90, 180));
+                _spriteBatch.Draw(_white, new Rectangle(x + 46 * S, y + 18 * S, 10 * S, 4 * S), new Color(255, 90, 90, 180));
             }
         }
 
@@ -1593,29 +1696,29 @@ namespace PoliceChaser
 
                 if (_mission.Weather == Weather.Rain)
                 {
-                    _spriteBatch.Draw(_art.RainDrop(), new Rectangle((int)x, (int)y, 2, 8), Color.White * 0.75f);
+                    _spriteBatch.Draw(_art.RainDrop(), new Rectangle((int)(x * S), (int)(y * S), 2 * S, 8 * S), Color.White * 0.75f);
                 }
                 else if (_mission.Weather == Weather.Snow)
                 {
                     float drift = MathF.Sin(_time + i) * 6f;
-                    _spriteBatch.Draw(_art.SnowFlake(), new Rectangle((int)(x + drift), (int)y, 3, 3), Color.White);
+                    _spriteBatch.Draw(_art.SnowFlake(), new Rectangle((int)((x + drift) * S), (int)(y * S), 3 * S, 3 * S), Color.White);
                 }
                 else
                 {
-                    _spriteBatch.Draw(_white, new Rectangle((int)x, (int)y, 14, 1),
+                    _spriteBatch.Draw(_white, new Rectangle((int)(x * S), (int)(y * S), 14 * S, S),
                         new Color(240, 210, 160, 90));
                 }
             }
 
             if (_mission.Weather == Weather.Sandstorm)
             {
-                Rect(0, RoadRenderer.ViewTop, VirtualWidth, RoadRenderer.ViewBottom - RoadRenderer.ViewTop,
+                Rect(0, 18, VirtualWidth, 190,
                     new Color(220, 180, 120, 30));
             }
 
             if (_mission.Weather == Weather.Snow)
             {
-                Rect(0, RoadRenderer.ViewTop, VirtualWidth, RoadRenderer.ViewBottom - RoadRenderer.ViewTop,
+                Rect(0, 18, VirtualWidth, 190,
                     new Color(200, 220, 255, 18));
             }
         }
@@ -1638,8 +1741,8 @@ namespace PoliceChaser
             Text(((int)MathF.Ceiling(time)).ToString("D3"), 292, 4, timeColor);
 
             // Bottom console.
-            Rect(0, RoadRenderer.ViewBottom, VirtualWidth, VirtualHeight - RoadRenderer.ViewBottom, new Color(8, 10, 22));
-            Rect(0, RoadRenderer.ViewBottom, VirtualWidth, 1, new Color(60, 70, 110));
+            Rect(0, 208, VirtualWidth, VirtualHeight - 208, new Color(8, 10, 22));
+            Rect(0, 208, VirtualWidth, 1, new Color(60, 70, 110));
 
             int speedMph = (int)(_race.Speed / Race.MaxSpeed * 180f);
             Text("MPH", 6, 212, new Color(140, 150, 185));
@@ -1658,7 +1761,23 @@ namespace PoliceChaser
             }
 
             int gap = (int)(_race.Gap / 10f);
-            Text("RANGE " + gap.ToString("D4") + "M", 112, 232, _race.Escaping ? new Color(255, 120, 120) : new Color(140, 150, 185));
+            if (_mission.SuspectArmed)
+            {
+                Text("HULL", 112, 232, new Color(140, 150, 185));
+                for (int i = 0; i < _race.PlayerMaxHealth; i++)
+                {
+                    Rect(136 + i * 11, 233, 8, 7,
+                        i < _race.PlayerHealth ? new Color(90, 220, 140) : new Color(40, 44, 60));
+                }
+
+                Text("RANGE " + gap.ToString("D4") + "M", 176, 232,
+                    _race.Escaping ? new Color(255, 120, 120) : new Color(140, 150, 185));
+            }
+            else
+            {
+                Text("RANGE " + gap.ToString("D4") + "M", 112, 232,
+                    _race.Escaping ? new Color(255, 120, 120) : new Color(140, 150, 185));
+            }
 
             Text("MISSION", 250, 212, new Color(140, 150, 185));
             Text((_campaignIndex + 1) + "/" + Mission.All.Count, 250, 222, Color.White);
@@ -1789,8 +1908,16 @@ namespace PoliceChaser
             TextShadow("GAME OVER", 160, 46, new Color(250, 90, 90), 4);
             TextCentered("PURSUIT FAILED", 160, 80, new Color(200, 210, 235));
 
-            Text("SUSPECT", 44, 100, new Color(130, 140, 175));
-            Text(_mission.SuspectName + " GOT AWAY", 44, 110, new Color(255, 160, 160));
+            if (_race?.Wrecked == true)
+            {
+                Text("CAUSE", 44, 100, new Color(130, 140, 175));
+                Text("YOUR CAR WAS WRECKED", 44, 110, new Color(255, 160, 160));
+            }
+            else
+            {
+                Text("SUSPECT", 44, 100, new Color(130, 140, 175));
+                Text(_mission.SuspectName + " GOT AWAY", 44, 110, new Color(255, 160, 160));
+            }
 
             Text("MISSION", 44, 128, new Color(130, 140, 175));
             Text(_mission.Title, 44, 138, Color.White);
@@ -1893,6 +2020,9 @@ namespace PoliceChaser
                 case "neon": return "NEON";
                 case "desert": return "DESERT";
                 case "arctic": return "ARCTIC";
+                case "steelworks": return "STEEL";
+                case "interstate": return "INTERSTATE";
+                case "canyon": return "CANYON";
                 default: return "---";
             }
         }

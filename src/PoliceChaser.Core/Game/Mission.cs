@@ -11,7 +11,10 @@ namespace PoliceChaser.Game
         Alpine,
         Neon,
         Desert,
-        Arctic
+        Arctic,
+        Industrial,
+        Highway,
+        Canyon
     }
 
     public enum Weather
@@ -23,9 +26,10 @@ namespace PoliceChaser.Game
     }
 
     /// <summary>
-    /// One pursuit. The six missions are an interpretation of the 8-bit chase format rather
-    /// than a copy of it: the original stages are replaced with original locations and suspects,
-    /// and the last three are entirely new missions that did not exist in the source game.
+    /// One pursuit. These are an interpretation of the 8-bit chase format rather than a copy of
+    /// it: the original stages are replaced with original locations and suspects. Series I ends
+    /// with three new missions; Series II is an original sequel tour whose suspects are armed and
+    /// shoot back at the player.
     /// </summary>
     public sealed class Mission
     {
@@ -44,6 +48,12 @@ namespace PoliceChaser.Game
         public int SuspectColor { get; }
         public bool IsNewMission { get; }
 
+        /// <summary>1 for the original tour, 2 for the Series II sequel tour.</summary>
+        public int Series { get; }
+
+        /// <summary>Series II suspects fire at the player, who has a hull that can be wrecked.</summary>
+        public bool SuspectArmed { get; }
+
         public Mission(
             string id,
             string title,
@@ -58,7 +68,9 @@ namespace PoliceChaser.Game
             float suspectBaseSpeed,
             float trafficBase,
             int suspectColor,
-            bool isNewMission)
+            bool isNewMission,
+            int series = 1,
+            bool suspectArmed = false)
         {
             Id = id;
             Title = title;
@@ -74,11 +86,14 @@ namespace PoliceChaser.Game
             TrafficBase = trafficBase;
             SuspectColor = suspectColor;
             IsNewMission = isNewMission;
+            Series = series;
+            SuspectArmed = suspectArmed;
         }
 
         /// <summary>Mission list in campaign order.</summary>
         public static IReadOnlyList<Mission> All { get; } = new[]
         {
+            // ---- Series I ------------------------------------------------------------
             new Mission(
                 "harbour",
                 "HARBOUR PURSUIT",
@@ -173,6 +188,61 @@ namespace PoliceChaser.Game
                 10500f,
                 0.65f,
                 5,
+                true),
+
+            // ---- Series II: the sequel tour. Armed suspects, new territory. ----------
+            new Mission(
+                "steelworks",
+                "IRONWORKS",
+                "A gun runner is collecting his cargo from the old foundry.",
+                "VOLT",
+                "Arms trafficking",
+                MissionTheme.Industrial,
+                Weather.Rain,
+                104000f,
+                96f,
+                5,
+                10700f,
+                0.75f,
+                1,
+                true,
+                2,
+                true),
+
+            new Mission(
+                "interstate",
+                "INTERSTATE 9",
+                "An armoured car crew is running the state line at speed.",
+                "RIPPER",
+                "Armoured car heist",
+                MissionTheme.Highway,
+                Weather.Clear,
+                108000f,
+                98f,
+                5,
+                10900f,
+                0.85f,
+                2,
+                true,
+                2,
+                true),
+
+            new Mission(
+                "canyon",
+                "RED CANYON",
+                "A kidnapping suspect is heading for the desert rim.",
+                "CROW",
+                "Kidnapping",
+                MissionTheme.Canyon,
+                Weather.Sandstorm,
+                112000f,
+                100f,
+                6,
+                11100f,
+                0.8f,
+                4,
+                true,
+                2,
                 true)
         };
 
@@ -214,6 +284,24 @@ namespace PoliceChaser.Game
                 for (int i = 0; i < All.Count; i++)
                 {
                     if (All[i].IsNewMission)
+                    {
+                        count++;
+                    }
+                }
+
+                return count;
+            }
+        }
+
+        /// <summary>Number of missions in the Series II sequel tour.</summary>
+        public static int SeriesTwoCount
+        {
+            get
+            {
+                int count = 0;
+                for (int i = 0; i < All.Count; i++)
+                {
+                    if (All[i].Series == 2)
                     {
                         count++;
                     }

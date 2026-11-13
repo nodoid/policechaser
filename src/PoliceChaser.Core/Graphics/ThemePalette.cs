@@ -119,6 +119,63 @@ namespace PoliceChaser.Graphics
                         BuildingDark = new Color(46, 66, 92)
                     };
 
+                case Game.MissionTheme.Industrial:
+                    return new ThemePalette
+                    {
+                        SkyTop = new Color(26, 32, 48),
+                        SkyBottom = new Color(150, 120, 96),
+                        Sun = new Color(255, 170, 90),
+                        FarSkyline = new Color(78, 80, 92),
+                        NearSkyline = new Color(48, 50, 60),
+                        Grass = new Color(86, 80, 70),
+                        Road = new Color(64, 62, 66),
+                        RoadDark = new Color(56, 54, 58),
+                        RumbleLight = new Color(222, 210, 190),
+                        RumbleDark = new Color(150, 70, 50),
+                        Lane = new Color(228, 214, 170),
+                        Fog = new Color(140, 124, 110),
+                        BuildingLit = new Color(255, 190, 110),
+                        BuildingDark = new Color(40, 40, 50)
+                    };
+
+                case Game.MissionTheme.Highway:
+                    return new ThemePalette
+                    {
+                        SkyTop = new Color(40, 110, 180),
+                        SkyBottom = new Color(176, 214, 238),
+                        Sun = new Color(255, 250, 220),
+                        FarSkyline = new Color(128, 150, 170),
+                        NearSkyline = new Color(86, 110, 92),
+                        Grass = new Color(74, 132, 72),
+                        Road = new Color(78, 80, 88),
+                        RoadDark = new Color(70, 72, 80),
+                        RumbleLight = new Color(240, 240, 232),
+                        RumbleDark = new Color(200, 90, 70),
+                        Lane = new Color(250, 244, 200),
+                        Fog = new Color(176, 196, 214),
+                        BuildingLit = new Color(250, 220, 160),
+                        BuildingDark = new Color(60, 72, 86)
+                    };
+
+                case Game.MissionTheme.Canyon:
+                    return new ThemePalette
+                    {
+                        SkyTop = new Color(60, 40, 96),
+                        SkyBottom = new Color(236, 140, 96),
+                        Sun = new Color(255, 220, 150),
+                        FarSkyline = new Color(150, 84, 72),
+                        NearSkyline = new Color(108, 56, 48),
+                        Grass = new Color(176, 108, 70),
+                        Road = new Color(76, 66, 62),
+                        RoadDark = new Color(68, 58, 54),
+                        RumbleLight = new Color(240, 220, 190),
+                        RumbleDark = new Color(150, 70, 54),
+                        Lane = new Color(250, 232, 186),
+                        Fog = new Color(214, 150, 110),
+                        BuildingLit = new Color(250, 190, 130),
+                        BuildingDark = new Color(86, 46, 42)
+                    };
+
                 default:
                     return new ThemePalette
                     {

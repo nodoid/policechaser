@@ -8,9 +8,26 @@ namespace PoliceChaser.Tests
     public class MissionTests
     {
         [Fact]
-        public void Campaign_has_six_missions()
+        public void Campaign_has_nine_missions()
         {
-            Assert.Equal(6, Mission.All.Count);
+            Assert.Equal(9, Mission.All.Count);
+        }
+
+        [Fact]
+        public void Series_two_has_three_armed_missions()
+        {
+            Assert.Equal(3, Mission.SeriesTwoCount);
+
+            foreach (Mission mission in Mission.All)
+            {
+                if (mission.Series == 2)
+                {
+                    Assert.True(mission.SuspectArmed, "Series II suspects must be armed");
+                    Assert.True(mission.IsNewMission);
+                }
+            }
+
+            Assert.False(Mission.All[0].SuspectArmed);
         }
 
         [Fact]
@@ -30,14 +47,16 @@ namespace PoliceChaser.Tests
         }
 
         [Fact]
-        public void New_missions_are_the_last_three()
+        public void New_missions_are_the_last_six()
         {
             Assert.False(Mission.All[0].IsNewMission);
             Assert.False(Mission.All[1].IsNewMission);
             Assert.False(Mission.All[2].IsNewMission);
-            Assert.True(Mission.All[3].IsNewMission);
-            Assert.True(Mission.All[4].IsNewMission);
-            Assert.True(Mission.All[5].IsNewMission);
+
+            for (int i = 3; i < Mission.All.Count; i++)
+            {
+                Assert.True(Mission.All[i].IsNewMission);
+            }
         }
 
         [Fact]
@@ -55,6 +74,8 @@ namespace PoliceChaser.Tests
         {
             Assert.NotNull(Mission.ById("neon"));
             Assert.Equal("NEON GRID", Mission.ById("neon").Title);
+            Assert.NotNull(Mission.ById("interstate"));
+            Assert.Equal(2, Mission.ById("interstate").Series);
             Assert.Null(Mission.ById("does-not-exist"));
         }
 

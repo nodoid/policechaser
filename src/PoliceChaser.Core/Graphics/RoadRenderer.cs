@@ -16,17 +16,19 @@ namespace PoliceChaser.Graphics
     }
 
     /// <summary>
-    /// Scanline pseudo-3D road renderer in the style of the 8-bit chase games: the road is drawn
-    /// as horizontal bands with per-scanline perspective, sprites are projected by depth and
-    /// clipped against hills.
+    /// Scanline pseudo-3D road renderer in the style of the 8-bit chase games. It renders
+    /// directly in target pixels at <see cref="RenderSettings.Scale"/> times the logical
+    /// resolution, so the road bands, skyline and sprites are genuinely high resolution.
     /// </summary>
     public sealed class RoadRenderer
     {
-        public const int ScreenWidth = 320;
-        public const int ScreenHeight = 240;
-        public const int ViewTop = 18;
-        public const int ViewBottom = 208;
-        public const int Horizon = 92;
+        private const int S = RenderSettings.Scale;
+
+        public const int ScreenWidth = RenderSettings.Width;
+        public const int ScreenHeight = RenderSettings.Height;
+        public const int ViewTop = 18 * S;
+        public const int ViewBottom = 208 * S;
+        public const int Horizon = 92 * S;
         public const int DrawDistance = 150;
 
         private const float CameraDepth = 0.84f;
@@ -48,7 +50,7 @@ namespace PoliceChaser.Graphics
         private readonly int[] _index = new int[DrawDistance + 2];
         private int _drawn;
 
-        /// <summary>Horizontal skyline drift, accumulated from curves by the game.</summary>
+        /// <summary>Horizontal skyline drift, accumulated from curves by the game (logical units).</summary>
         public float SkylineOffset { get; set; }
 
         public void Render(
@@ -92,8 +94,8 @@ namespace PoliceChaser.Graphics
                 float y0 = segment.Y;
                 float y1 = road.Segments[nextIdx].Y;
 
-                Projected near = Project(pixel, -x, y0, z0, cameraZ, camX, cameraY, shakeX, shakeY);
-                Projected far = Project(pixel, -x - dx, y1, z1, cameraZ, camX, cameraY, shakeX, shakeY);
+                Projected near = Project(-x, y0, z0, cameraZ, camX, cameraY, shakeX, shakeY);
+                Projected far = Project(-x - dx, y1, z1, cameraZ, camX, cameraY, shakeX, shakeY);
 
                 x += dx;
                 dx += segment.Curve;
@@ -111,7 +113,7 @@ namespace PoliceChaser.Graphics
                 float fog = n / (float)DrawDistance;
                 fog = MathF.Min(1f, fog * fog * 1.15f);
 
-                DrawBand(batch, pixel, palette, idx, n, near, far, fog, maxy);
+                DrawBand(batch, pixel, palette, idx, near, far, fog, maxy);
 
                 _clip[idx] = (int)Math.Clamp(near.Y, ViewTop, ViewBottom);
                 _near[_drawn] = near;
@@ -122,7 +124,7 @@ namespace PoliceChaser.Graphics
                 maxy = far.Y;
             }
 
-            DrawSprites(batch, art, road, palette, sprites, cameraZ, camX, cameraY, shakeX, shakeY);
+            DrawSprites(batch, art, road, sprites, cameraZ, camX, cameraY, shakeX, shakeY);
         }
 
         private void DrawSky(SpriteBatch batch, Texture2D pixel, Art art, ThemePalette palette, MissionTheme theme)
@@ -134,22 +136,24 @@ namespace PoliceChaser.Graphics
                 batch.Draw(pixel, new Rectangle(0, y, ScreenWidth, 1), color);
             }
 
+            float drift = SkylineOffset * S;
+
             Texture2D sun = art.Sun(theme);
-            int sunX = (int)(160 - SkylineOffset * 0.18f) - sun.Width / 2;
-            sunX = ((sunX % 900) + 900) % 900 - 120;
-            batch.Draw(sun, new Rectangle(sunX, 26, sun.Width, sun.Height), Color.White);
+            int sunX = (int)(160 * S - drift * 0.18f) - sun.Width / 2;
+            sunX = ((sunX % (900 * S)) + 900 * S) % (900 * S) - 120 * S;
+            batch.Draw(sun, new Rectangle(sunX, 26 * S, sun.Width, sun.Height), Color.White);
 
-            DrawSkylineLayer(batch, art.Skyline(theme, false), Horizon + 4, SkylineOffset * 0.22f, 1f);
-            DrawSkylineLayer(batch, art.Skyline(theme, true), Horizon + 6, SkylineOffset * 0.5f, 1f);
+            DrawSkylineLayer(batch, art.Skyline(theme, false), Horizon + 4 * S, drift * 0.22f, 1f);
+            DrawSkylineLayer(batch, art.Skyline(theme, true), Horizon + 6 * S, drift * 0.5f, 1f);
 
-            // Haze that hides the seam between skyline and road.
-            for (int y = Horizon - 6; y < Horizon + 10; y++)
+            for (int y = Horizon - 6 * S; y < Horizon + 10 * S; y++)
             {
-                float t = (y - (Horizon - 6)) / 16f;
+                float t = (y - (Horizon - 6 * S)) / (16f * S);
                 int alpha = (int)(70 * (1f - MathF.Abs(t - 0.5f) * 2f));
                 if (alpha > 0)
                 {
-                    batch.Draw(pixel, new Rectangle(0, y, ScreenWidth, 1), new Color(palette.Fog.R, palette.Fog.G, palette.Fog.B, alpha));
+                    batch.Draw(pixel, new Rectangle(0, y, ScreenWidth, 1),
+                        new Color(palette.Fog.R, palette.Fog.G, palette.Fog.B, alpha));
                 }
             }
         }
@@ -171,7 +175,6 @@ namespace PoliceChaser.Graphics
             Texture2D pixel,
             ThemePalette palette,
             int segmentIndex,
-            int distance,
             Projected near,
             Projected far,
             float fog,
@@ -244,7 +247,6 @@ namespace PoliceChaser.Graphics
             SpriteBatch batch,
             Art art,
             Road road,
-            ThemePalette palette,
             IReadOnlyList<WorldSprite> sprites,
             float cameraZ,
             float camX,
@@ -283,10 +285,9 @@ namespace PoliceChaser.Graphics
                     continue;
                 }
 
-                // Anything that would balloon past a quarter of the screen is a roadside
-                // object that has slid too close to the camera; drop it rather than let it
-                // cover the road.
-                if (w > 190f)
+                // Roadside objects that slide too close to the camera are culled rather than
+                // allowed to cover the carriageway.
+                if (w > 190f * S)
                 {
                     continue;
                 }
@@ -307,7 +308,7 @@ namespace PoliceChaser.Graphics
             }
         }
 
-        private Projected Project(Texture2D pixel, float offsetX, float worldY, float worldZ, float cameraZ, float camX, float cameraY, float shakeX, float shakeY)
+        private Projected Project(float offsetX, float worldY, float worldZ, float cameraZ, float camX, float cameraY, float shakeX, float shakeY)
         {
             float dz = worldZ - cameraZ;
             if (dz < 0.01f)
@@ -324,7 +325,7 @@ namespace PoliceChaser.Graphics
             };
         }
 
-        /// <summary>Projects an arbitrary point; used for the suspect and traffic markers.</summary>
+        /// <summary>Projects an arbitrary point (target pixels); used for markers.</summary>
         public static Vector2 ProjectPoint(float x, float z, float cameraZ, float playerX, float cameraY, float groundY)
         {
             float dz = MathF.Max(0.01f, z - cameraZ);

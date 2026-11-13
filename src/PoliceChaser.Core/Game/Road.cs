@@ -184,6 +184,18 @@ namespace PoliceChaser.Game
                     nearKind = PropKind.SnowPole;
                     farKind = PropKind.Pine;
                     break;
+                case MissionTheme.Industrial:
+                    nearKind = PropKind.Building;
+                    farKind = PropKind.Lamp;
+                    break;
+                case MissionTheme.Highway:
+                    nearKind = PropKind.Sign;
+                    farKind = PropKind.Billboard;
+                    break;
+                case MissionTheme.Canyon:
+                    nearKind = PropKind.Cactus;
+                    farKind = PropKind.Rock;
+                    break;
                 default:
                     nearKind = PropKind.Building;
                     farKind = PropKind.Lamp;

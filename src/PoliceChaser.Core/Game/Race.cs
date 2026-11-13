@@ -23,7 +23,10 @@ namespace PoliceChaser.Game
         TimedOut,
         TurboEmpty,
         OffRoad,
-        SuspectEscaping
+        SuspectEscaping,
+        Gunfire,
+        PlayerHit,
+        Wrecked
     }
 
     public struct RaceEvent
@@ -60,6 +63,7 @@ namespace PoliceChaser.Game
         private float _spawnTimer;
         private float _ramCooldown;
         private float _escapeWarnTimer;
+        private float _gunTimer;
         private float _rivalPhase;
         private float _shake;
         private float _skid;
@@ -88,9 +92,14 @@ namespace PoliceChaser.Game
         public int RawScore { get; private set; }
         public int Score => DifficultyRules.Weight(Difficulty, RawScore);
 
+        /// <summary>Hull points. Only armed Series II suspects can damage the player.</summary>
+        public int PlayerMaxHealth => Mission.SuspectArmed ? 3 : 0;
+        public int PlayerHealth { get; private set; }
+
         public bool Busted { get; private set; }
         public bool TimedOut { get; private set; }
-        public bool Finished => Busted || TimedOut;
+        public bool Wrecked { get; private set; }
+        public bool Finished => Busted || TimedOut || Wrecked;
 
         public float Shake => _shake;
         public float Skid => _skid;
@@ -111,6 +120,8 @@ namespace PoliceChaser.Game
 
             RivalMaxHealth = mission.RequiredRams;
             RivalHealth = mission.RequiredRams;
+            PlayerHealth = mission.SuspectArmed ? 3 : 0;
+            _gunTimer = 1.8f;
 
             float suspectScale = DifficultyRules.SuspectSpeedScale(difficulty);
             RivalSpeed = mission.SuspectBaseSpeed * suspectScale;
@@ -246,7 +257,9 @@ namespace PoliceChaser.Game
                 escape = mission_escape();
             }
 
-            float closing = 1f + DifficultyRules.CatchUpAssist(Difficulty) * (gap > 9000f ? 1f : 0f);
+            // Rubber banding must slow the suspect while it is far ahead, otherwise a suspect
+            // that gets away accelerates forever and the pursuit is unwinnable.
+            float closing = MathF.Max(0.55f, 1f - DifficultyRules.CatchUpAssist(Difficulty) * (gap > 9000f ? 1f : 0f));
             float modulate = 1f + 0.045f * MathF.Sin(_rivalPhase) + 0.02f * MathF.Sin(_rivalPhase * 2.7f);
             _rivalPhase += dt * 1.6f;
 
@@ -291,6 +304,36 @@ namespace PoliceChaser.Game
                         Value = bustBonus + timeBonus
                     });
                     return;
+                }
+            }
+
+            // ---- armed suspects (Series II) ------------------------------------------
+            if (Mission.SuspectArmed)
+            {
+                _gunTimer -= dt;
+                float range = RivalZ - PlayerZ;
+                if (_gunTimer <= 0f && range < 6500f && range > -1500f)
+                {
+                    _gunTimer = 1.5f + (float)_random.NextDouble() * 1.3f;
+                    Events.Add(new RaceEvent { Type = RaceEventType.Gunfire });
+
+                    // Weaving across the road makes the player a harder target.
+                    float hitChance = 0.58f - MathF.Min(0.34f, MathF.Abs(PlayerX - RivalX) * 0.35f);
+                    if (_random.NextDouble() < hitChance)
+                    {
+                        PlayerHealth = Math.Max(0, PlayerHealth - 1);
+                        Speed *= 0.86f;
+                        TimeRemaining = MathF.Max(0.1f, TimeRemaining - 1.2f);
+                        _shake = 1f;
+                        Events.Add(new RaceEvent { Type = RaceEventType.PlayerHit, Value = PlayerHealth });
+
+                        if (PlayerHealth <= 0)
+                        {
+                            Wrecked = true;
+                            Events.Add(new RaceEvent { Type = RaceEventType.Wrecked });
+                            return;
+                        }
+                    }
                 }
             }
 

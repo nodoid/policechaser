@@ -9,15 +9,41 @@ namespace PoliceChaser.Graphics
     /// <summary>Tiny software canvas used to bake all of the game's pixel art at startup.</summary>
     public sealed class Canvas
     {
+        /// <summary>Supersampling factor. Every canvas is authored in logical pixels and
+        /// rasterised at this multiple so the art is genuinely high resolution.</summary>
+        public static int DefaultScale = 1;
+
         public readonly Color[] Pixels;
         public readonly int Width;
         public readonly int Height;
+        private readonly int _scale;
 
         public Canvas(int width, int height)
         {
-            Width = width;
-            Height = height;
-            Pixels = new Color[width * height];
+            _scale = DefaultScale < 1 ? 1 : DefaultScale;
+            Width = width * _scale;
+            Height = height * _scale;
+            Pixels = new Color[Width * Height];
+        }
+
+        private void SetPixel(int x, int y, Color color)
+        {
+            if (x < 0 || y < 0 || x >= Width || y >= Height)
+            {
+                return;
+            }
+
+            Pixels[y * Width + x] = color;
+        }
+
+        private Color GetPixel(int x, int y)
+        {
+            if (x < 0 || y < 0 || x >= Width || y >= Height)
+            {
+                return default;
+            }
+
+            return Pixels[y * Width + x];
         }
 
         public void Clear(Color color)
@@ -30,74 +56,103 @@ namespace PoliceChaser.Graphics
 
         public void Set(int x, int y, Color color)
         {
-            if (x < 0 || y < 0 || x >= Width || y >= Height)
+            int scale = _scale;
+            for (int dy = 0; dy < scale; dy++)
             {
-                return;
+                for (int dx = 0; dx < scale; dx++)
+                {
+                    SetPixel(x * scale + dx, y * scale + dy, color);
+                }
             }
-
-            Pixels[y * Width + x] = color;
         }
 
         public void Blend(int x, int y, Color color)
         {
-            if (x < 0 || y < 0 || x >= Width || y >= Height || color.A == 0)
+            if (color.A == 0)
             {
                 return;
             }
 
-            Color existing = Pixels[y * Width + x];
-            if (existing.A == 0)
+            int scale = _scale;
+            for (int dy = 0; dy < scale; dy++)
             {
-                Pixels[y * Width + x] = color;
-                return;
-            }
+                for (int dx = 0; dx < scale; dx++)
+                {
+                    int px = x * scale + dx;
+                    int py = y * scale + dy;
+                    Color existing = GetPixel(px, py);
+                    if (existing.A == 0)
+                    {
+                        SetPixel(px, py, color);
+                        continue;
+                    }
 
-            float a = color.A / 255f;
-            Pixels[y * Width + x] = new Color(
-                (int)(existing.R * (1 - a) + color.R * a),
-                (int)(existing.G * (1 - a) + color.G * a),
-                (int)(existing.B * (1 - a) + color.B * a),
-                Math.Max(existing.A, color.A));
+                    float a = color.A / 255f;
+                    SetPixel(px, py, new Color(
+                        (int)(existing.R * (1 - a) + color.R * a),
+                        (int)(existing.G * (1 - a) + color.G * a),
+                        (int)(existing.B * (1 - a) + color.B * a),
+                        Math.Max(existing.A, color.A)));
+                }
+            }
         }
 
         public void FillRect(int x, int y, int w, int h, Color color)
         {
-            for (int yy = y; yy < y + h; yy++)
+            int scale = _scale;
+            int px = x * scale;
+            int py = y * scale;
+            int pw = w * scale;
+            int ph = h * scale;
+            for (int yy = py; yy < py + ph; yy++)
             {
-                for (int xx = x; xx < x + w; xx++)
+                for (int xx = px; xx < px + pw; xx++)
                 {
-                    Set(xx, yy, color);
+                    SetPixel(xx, yy, color);
                 }
             }
         }
 
         public void Rect(int x, int y, int w, int h, Color color)
         {
-            for (int xx = x; xx < x + w; xx++)
+            int t = _scale;
+            FillRect(x, y, w, 1, color);
+            FillRect(x, y + h - 1, w, 1, color);
+            FillRect(x, y, 1, h, color);
+            FillRect(x + w - 1, y, 1, h, color);
+            // Make the outline the same visual weight as the filled shapes.
+            if (t > 1)
             {
-                Set(xx, y, color);
-                Set(xx, y + h - 1, color);
-            }
-
-            for (int yy = y; yy < y + h; yy++)
-            {
-                Set(x, yy, color);
-                Set(x + w - 1, yy, color);
+                FillRect(x + 1, y + 1, w - 2, 1, color);
+                FillRect(x + 1, y + h - 2, w - 2, 1, color);
             }
         }
 
         public void Line(int x0, int y0, int x1, int y1, Color color)
         {
-            int dx = Math.Abs(x1 - x0);
-            int dy = -Math.Abs(y1 - y0);
-            int sx = x0 < x1 ? 1 : -1;
-            int sy = y0 < y1 ? 1 : -1;
+            int scale = _scale;
+            int ax = x0 * scale;
+            int ay = y0 * scale;
+            int bx = x1 * scale;
+            int by = y1 * scale;
+            int thickness = Math.Max(1, scale);
+            int dx = Math.Abs(bx - ax);
+            int dy = -Math.Abs(by - ay);
+            int sx = ax < bx ? 1 : -1;
+            int sy = ay < by ? 1 : -1;
             int err = dx + dy;
 
             while (true)
             {
-                Set(x0, y0, color);
-                if (x0 == x1 && y0 == y1)
+                for (int ox = 0; ox < thickness; ox++)
+                {
+                    for (int oy = 0; oy < thickness; oy++)
+                    {
+                        SetPixel(ax + ox, ay + oy, color);
+                    }
+                }
+
+                if (ax == bx && ay == by)
                 {
                     break;
                 }
@@ -106,28 +161,34 @@ namespace PoliceChaser.Graphics
                 if (e2 >= dy)
                 {
                     err += dy;
-                    x0 += sx;
+                    ax += sx;
                 }
 
                 if (e2 <= dx)
                 {
                     err += dx;
-                    y0 += sy;
+                    ay += sy;
                 }
             }
         }
 
         public void FillEllipse(int cx, int cy, int rx, int ry, Color color)
         {
-            for (int y = -ry; y <= ry; y++)
+            int scale = _scale;
+            int ccx = cx * scale;
+            int ccy = cy * scale;
+            int rrx = Math.Max(1, rx * scale);
+            int rry = Math.Max(1, ry * scale);
+
+            for (int y = -rry; y <= rry; y++)
             {
-                for (int x = -rx; x <= rx; x++)
+                for (int x = -rrx; x <= rrx; x++)
                 {
-                    float nx = x / (float)rx;
-                    float ny = y / (float)ry;
+                    float nx = x / (float)rrx;
+                    float ny = y / (float)rry;
                     if (nx * nx + ny * ny <= 1f)
                     {
-                        Set(cx + x, cy + y, color);
+                        SetPixel(ccx + x, ccy + y, color);
                     }
                 }
             }
@@ -135,20 +196,23 @@ namespace PoliceChaser.Graphics
 
         public void FillTrapezoid(int topY, int bottomY, int topLeft, int topRight, int bottomLeft, int bottomRight, Color color)
         {
-            int height = bottomY - topY;
+            int scale = _scale;
+            int ty = topY * scale;
+            int by = bottomY * scale;
+            int height = by - ty;
             if (height <= 0)
             {
                 return;
             }
 
-            for (int y = topY; y < bottomY; y++)
+            for (int y = ty; y < by; y++)
             {
-                float t = (y - topY) / (float)height;
-                int left = (int)(topLeft + (bottomLeft - topLeft) * t);
-                int right = (int)(topRight + (bottomRight - topRight) * t);
+                float t = (y - ty) / (float)height;
+                int left = (int)((topLeft + (bottomLeft - topLeft) * t) * scale);
+                int right = (int)((topRight + (bottomRight - topRight) * t) * scale);
                 for (int x = left; x <= right; x++)
                 {
-                    Set(x, y, color);
+                    SetPixel(x, y, color);
                 }
             }
         }
@@ -160,12 +224,13 @@ namespace PoliceChaser.Graphics
                 return;
             }
 
+            int scale = _scale;
             int minY = int.MaxValue;
             int maxY = int.MinValue;
             for (int i = 0; i < points.Length; i++)
             {
-                minY = Math.Min(minY, points[i].Y);
-                maxY = Math.Max(maxY, points[i].Y);
+                minY = Math.Min(minY, points[i].Y * scale);
+                maxY = Math.Max(maxY, points[i].Y * scale);
             }
 
             var crossings = new List<float>(8);
@@ -174,12 +239,14 @@ namespace PoliceChaser.Graphics
                 crossings.Clear();
                 for (int i = 0; i < points.Length; i++)
                 {
-                    Point a = points[i];
-                    Point b = points[(i + 1) % points.Length];
-                    if ((a.Y <= y && b.Y > y) || (b.Y <= y && a.Y > y))
+                    int ax = points[i].X * scale;
+                    int ay = points[i].Y * scale;
+                    int bx = points[(i + 1) % points.Length].X * scale;
+                    int by = points[(i + 1) % points.Length].Y * scale;
+                    if ((ay <= y && by > y) || (by <= y && ay > y))
                     {
-                        float t = (y - a.Y) / (float)(b.Y - a.Y);
-                        crossings.Add(a.X + t * (b.X - a.X));
+                        float t = (y - ay) / (float)(by - ay);
+                        crossings.Add(ax + t * (bx - ax));
                     }
                 }
 
@@ -190,7 +257,7 @@ namespace PoliceChaser.Graphics
                     int right = (int)MathF.Round(crossings[i + 1]);
                     for (int x = left; x <= right; x++)
                     {
-                        Set(x, y, color);
+                        SetPixel(x, y, color);
                     }
                 }
             }
@@ -240,6 +307,7 @@ namespace PoliceChaser.Graphics
         public Art(GraphicsDevice device)
         {
             _device = device;
+            Canvas.DefaultScale = RenderSettings.Scale;
 
             var white = new Canvas(1, 1);
             white.Set(0, 0, Color.White);
@@ -339,7 +407,7 @@ namespace PoliceChaser.Graphics
             var random = new Random(9001 + (int)theme * 37 + (front ? 11 : 0));
             Color color = front ? palette.NearSkyline : palette.FarSkyline;
 
-            if (theme == MissionTheme.Alpine || theme == MissionTheme.Coast)
+            if (theme == MissionTheme.Alpine || theme == MissionTheme.Coast || theme == MissionTheme.Highway)
             {
                 // Mountain range.
                 int baseY = canvas.Height;
@@ -374,7 +442,7 @@ namespace PoliceChaser.Graphics
                     }
                 }
             }
-            else if (theme == MissionTheme.Desert)
+            else if (theme == MissionTheme.Desert || theme == MissionTheme.Canyon)
             {
                 // Mesa shapes.
                 for (int p = 0; p < 8; p++)

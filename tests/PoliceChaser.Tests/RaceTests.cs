@@ -166,6 +166,52 @@ namespace PoliceChaser.Tests
         }
 
         [Fact]
+        public void Armed_series_two_suspects_shoot_back()
+        {
+            Race race = new Race(Mission.ById("steelworks"), Difficulty.Beginner, 1234);
+            Assert.Equal(3, race.PlayerMaxHealth);
+            Assert.Equal(3, race.PlayerHealth);
+
+            bool sawGunfire = false;
+            int lowestHull = race.PlayerHealth;
+            for (int i = 0; i < 60 * 90 && !race.Finished; i++)
+            {
+                float steer = Math.Clamp((race.RivalX - race.PlayerX) * 2f, -1f, 1f);
+                race.Update(1f / 60f, new RaceInput
+                {
+                    Accelerate = true,
+                    Turbo = race.Turbo > 0.05f,
+                    Steer = steer
+                });
+                lowestHull = Math.Min(lowestHull, race.PlayerHealth);
+
+                foreach (RaceEvent evt in race.Events)
+                {
+                    if (evt.Type == RaceEventType.Gunfire)
+                    {
+                        sawGunfire = true;
+                    }
+                }
+            }
+
+            Assert.True(sawGunfire,
+                "an armed suspect should open fire when the player closes in (gap=" + race.Gap +
+                " speed=" + race.Speed + " busted=" + race.Busted + " timedOut=" + race.TimedOut +
+                " wrecked=" + race.Wrecked + " hull=" + race.PlayerHealth + ")");
+            Assert.True(lowestHull <= race.PlayerMaxHealth);
+            Assert.Equal(race.Wrecked, race.PlayerHealth <= 0);
+        }
+
+        [Fact]
+        public void Unarmed_missions_have_no_hull()
+        {
+            Race race = NewRace();
+            Assert.Equal(0, race.PlayerMaxHealth);
+            Assert.Equal(0, race.PlayerHealth);
+            Assert.False(race.Wrecked);
+        }
+
+        [Fact]
         public void Score_uses_the_difficulty_divisor()
         {
             Assert.Equal(1, DifficultyRules.ScoreDivisor(Difficulty.Beginner));
