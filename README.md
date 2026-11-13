@@ -152,7 +152,8 @@ dotnet run --project src/PoliceChaser.Desktop -- --selftest race --frames 200 --
 ```
 
 Screens: `splash`, `title`, `difficulty`, `mission`, `briefing`, `briefing2`, `race`, `race2`,
-`race3`, `crash`, `wreck`, `pads`, `busted`, `gameover`, `name`, `nametap`, `touch`, `scores`.
+`race3`, `crash`, `wreck`, `pads`, `busted`, `gameover`, `name`, `nametap`, `touch`, `scores`,
+`settings`.
 `pads` shows the race with the touch overlay forced on, `crash` holds the impact sparks on the
 player car, and `wreck` crashes repeatedly until the damaged-car game-over card appears, all for
 checking effects on a desktop build. `nametap` feeds one simulated

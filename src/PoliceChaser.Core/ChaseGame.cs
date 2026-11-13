@@ -26,6 +26,7 @@ namespace PoliceChaser
         GameOver,
         NameEntry,
         HighScores,
+        Settings,
         Paused
     }
 
@@ -73,6 +74,8 @@ namespace PoliceChaser
         private ScoreEntry _pendingEntry;
         private int _highlightIndex = -1;
         private int _lastRank;
+        private SettingsStore _settings;
+        private int _settingsRow;
         private string _lastName = "PC1";
         private int _nameCursor;
         private char[] _nameLetters = { 'P', 'C', '1' };
@@ -153,7 +156,9 @@ namespace PoliceChaser
             _font = new GameFont();
             _art = new Art(GraphicsDevice);
             _audio = new ChipAudio();
+            _settings = new SettingsStore(new LocalSettingsFile(LocalHighScoreFile.DefaultRoot));
             _scores = new HighScoreStore(new LocalHighScoreFile(LocalHighScoreFile.DefaultRoot));
+            ApplySettings();
 
             TouchPanel.EnableMouseTouchPoint = true;
             TouchPanel.EnableMouseGestures = false;
@@ -162,6 +167,8 @@ namespace PoliceChaser
             {
                 // Never let a smoke test touch (or pollute) the player's real table.
                 _scores = new HighScoreStore(new MemoryHighScoreFile());
+                _settings = new SettingsStore(new MemorySettingsFile());
+                ApplySettings();
                 SeedSelfTestScores();
                 PrepareSelfTest();
             }
@@ -173,6 +180,7 @@ namespace PoliceChaser
         protected override void UnloadContent()
         {
             _scores?.Save();
+            _settings?.Save();
             _audio?.Dispose();
             _art?.Dispose();
             _font?.Dispose();
@@ -250,6 +258,9 @@ namespace PoliceChaser
                 case GameScreen.Title:
                     UpdateTitle();
                     break;
+                case GameScreen.Settings:
+                    UpdateSettings();
+                    break;
                 case GameScreen.DifficultySelect:
                     UpdateDifficultySelect();
                     break;
@@ -314,6 +325,7 @@ namespace PoliceChaser
                 case GameScreen.DifficultySelect:
                 case GameScreen.MissionSelect:
                 case GameScreen.Briefing:
+                case GameScreen.Settings:
                     _audio.PlayMusic(ChipAudio.TrackTitle);
                     break;
                 case GameScreen.Racing:
@@ -352,6 +364,13 @@ namespace PoliceChaser
 
         private void UpdateTitle()
         {
+            if (_input.PointerPressed && SettingsButton.Contains(_input.Pointer.ToPoint()))
+            {
+                _audio.Play(_audio.Select);
+                SetScreen(GameScreen.Settings);
+                return;
+            }
+
             if (_input.PointerPressed && new Rectangle(196, 182, 124, 34).Contains(_input.Pointer.ToPoint()))
             {
                 _highlightIndex = -1;
@@ -366,6 +385,153 @@ namespace PoliceChaser
                 _difficultyCursor = (int)_difficulty;
                 SetScreen(GameScreen.DifficultySelect);
             }
+        }
+
+        // ------------------------------------------------------------------ settings
+
+        private static Rectangle SettingsButton => new Rectangle(96, 206, 100, 24);
+        private static Rectangle SettingsDone => new Rectangle(120, 182, 80, 26);
+        private static Rectangle SettingsRow(int row) => new Rectangle(20, 68 + row * 42, 280, 40);
+        private static Rectangle SettingsMinus(int row) => new Rectangle(96, 76 + row * 42, 24, 22);
+        private static Rectangle SettingsPlus(int row) => new Rectangle(232, 76 + row * 42, 24, 22);
+        private static Rectangle SettingsBar(int row) => new Rectangle(126, 78 + row * 42, 100, 18);
+
+        private void ApplySettings()
+        {
+            _audio.MusicVolume = _settings.Value.Music;
+            _audio.EffectsVolume = _settings.Value.Effects;
+            _audio.ApplyMusicVolume();
+        }
+
+        private void UpdateSettings()
+        {
+            bool touchUi = MobilePlatform || _PointerSeen;
+
+            if (touchUi && _input.PointerPressed)
+            {
+                Point point = _input.Pointer.ToPoint();
+
+                for (int row = 0; row < 2; row++)
+                {
+                    if (SettingsMinus(row).Contains(point))
+                    {
+                        _settingsRow = row;
+                        AdjustVolume(-0.1f);
+                        _input.Confirm = false;
+                        return;
+                    }
+
+                    if (SettingsPlus(row).Contains(point))
+                    {
+                        _settingsRow = row;
+                        AdjustVolume(0.1f);
+                        _input.Confirm = false;
+                        return;
+                    }
+
+                    if (SettingsRow(row).Contains(point))
+                    {
+                        _settingsRow = row;
+                        _audio.Play(_audio.Select);
+                        _input.Confirm = false;
+                        return;
+                    }
+                }
+
+                if (SettingsDone.Contains(point))
+                {
+                    _audio.Play(_audio.Select);
+                    SetScreen(GameScreen.Title);
+                    return;
+                }
+
+                _input.Confirm = false;
+                return;
+            }
+
+            if (_input.Up)
+            {
+                _settingsRow = 0;
+                _audio.Play(_audio.Select);
+            }
+
+            if (_input.Down)
+            {
+                _settingsRow = 1;
+                _audio.Play(_audio.Select);
+            }
+
+            if (_input.Left)
+            {
+                AdjustVolume(-0.1f);
+            }
+
+            if (_input.Right)
+            {
+                AdjustVolume(0.1f);
+            }
+
+            if (_input.Confirm || _input.Back)
+            {
+                _audio.Play(_audio.Select);
+                SetScreen(GameScreen.Title);
+            }
+        }
+
+        private void AdjustVolume(float delta)
+        {
+            if (_settingsRow == 0)
+            {
+                _settings.SetMusic(_audio.MusicVolume + delta);
+                _audio.MusicVolume = _settings.Value.Music;
+                _audio.ApplyMusicVolume();
+                return;
+            }
+
+            _settings.SetEffects(_audio.EffectsVolume + delta);
+            _audio.EffectsVolume = _settings.Value.Effects;
+            _audio.Play(_audio.Select);
+        }
+
+        private void DrawSettings()
+        {
+            Background(MissionTheme.Neon);
+            SirenStrip(0);
+
+            Panel(16, 22, 288, 206, new Color(8, 10, 26, 240), new Color(250, 210, 80));
+            TextShadow("SETTINGS", 160, 30, new Color(250, 220, 120), 2);
+            TextCentered("AUDIO", 160, 54, new Color(140, 150, 185));
+
+            DrawVolumeRow(0, "MUSIC", _audio.MusicVolume);
+            DrawVolumeRow(1, "EFFECTS", _audio.EffectsVolume);
+
+            TextCentered("UP/DOWN SELECT - LEFT/RIGHT ADJUST", 160, 160, new Color(150, 170, 210));
+            DrawKey(SettingsDone, "DONE");
+        }
+
+        private void DrawVolumeRow(int row, string label, float value)
+        {
+            int y = 76 + row * 42;
+            bool selected = _settingsRow == row;
+
+            Panel(24, y - 8, 272, 36,
+                selected ? new Color(24, 32, 66) : new Color(10, 14, 28),
+                selected ? new Color(250, 210, 80) : new Color(50, 60, 90));
+
+            Text(label, 34, y + 2, selected ? Color.White : new Color(190, 200, 220));
+            DrawKey(SettingsMinus(row), "-");
+            DrawKey(SettingsPlus(row), "+");
+
+            Rectangle bar = SettingsBar(row);
+            Rect(bar.X, bar.Y, bar.Width, bar.Height, new Color(20, 24, 40));
+            int filled = (int)MathF.Round(value * 10f);
+            for (int i = 0; i < 10; i++)
+            {
+                Rect(bar.X + 2 + i * 10, bar.Y + 3, 7, bar.Height - 6,
+                    i < filled ? new Color(250, 210, 80) : new Color(60, 66, 92));
+            }
+
+            Text((filled * 10).ToString("D2") + "%", 262, y + 2, new Color(160, 190, 230));
         }
 
         private void UpdateDifficultySelect()
@@ -623,6 +789,10 @@ namespace PoliceChaser
                     case RaceEventType.SuspectEscaping:
                         _audio.Play(_audio.Wrong, ChipAudio.Mix.Warning);
                         SetRadio("SUSPECT ESCAPING!");
+                        break;
+                    case RaceEventType.GunfireWarning:
+                        _audio.Play(_audio.Squelch, ChipAudio.Mix.Squelch);
+                        SetRadio("SHOTS INCOMING - WEAVE!");
                         break;
                     case RaceEventType.Gunfire:
                         _shake = MathF.Max(_shake, 0.5f);
@@ -1024,6 +1194,9 @@ namespace PoliceChaser
                     };
                     SetScreen(GameScreen.NameEntry);
                     break;
+                case "settings":
+                    SetScreen(GameScreen.Settings);
+                    break;
                 case "scores":
                     // A scratch table for the screenshot: never touch the player's real scores.
                     _scores = new HighScoreStore(new MemoryHighScoreFile());
@@ -1079,6 +1252,21 @@ namespace PoliceChaser
             AuditTap(250, 198);
             UpdateTitle();
             Check("title: VIEW TABLE button", _screen == GameScreen.HighScores);
+
+            SetScreen(GameScreen.Title);
+            AuditTap(SettingsButton.Center.X, SettingsButton.Center.Y);
+            UpdateTitle();
+            Check("title: SETTINGS button", _screen == GameScreen.Settings);
+
+            int musicStep = (int)MathF.Round(_audio.MusicVolume * 10f);
+            AuditTap(SettingsMinus(0).Center.X, SettingsMinus(0).Center.Y);
+            UpdateSettings();
+            Check("settings: minus lowers music",
+                (int)MathF.Round(_audio.MusicVolume * 10f) < musicStep);
+
+            AuditTap(SettingsDone.Center.X, SettingsDone.Center.Y);
+            UpdateSettings();
+            Check("settings: DONE returns to title", _screen == GameScreen.Title);
 
             _screenTime = 1f;
             AuditTap(160, 120);
@@ -1419,6 +1607,9 @@ namespace PoliceChaser
                 case GameScreen.Title:
                     DrawTitle();
                     break;
+                case GameScreen.Settings:
+                    DrawSettings();
+                    break;
                 case GameScreen.DifficultySelect:
                     DrawDifficultySelect();
                     break;
@@ -1706,6 +1897,8 @@ namespace PoliceChaser
             Panel(202, 174, 112, 30, new Color(8, 10, 26, 210), new Color(80, 90, 130));
             Text("HIGH SCORES", 214, 180, new Color(190, 200, 230));
             Text("VIEW TABLE", 214, 192, new Color(130, 145, 180));
+
+            DrawKey(SettingsButton, "SETTINGS");
         }
 
         // ------------------------------------------------------------------ menus
@@ -1941,6 +2134,14 @@ namespace PoliceChaser
                 {
                     TextShadow("GO!", 160, 84, new Color(120, 250, 140), 5);
                 }
+            }
+
+            if (_screen == GameScreen.Racing && _race != null && _race.GunWarning > 0f)
+            {
+                float pulse = 0.5f + 0.5f * MathF.Sin(_time * 26f);
+                Color warn = new Color(255, 70, 70) * (0.30f + 0.45f * pulse);
+                Rect(0, 0, VirtualWidth, 3, warn);
+                Rect(0, VirtualHeight - 4, VirtualWidth, 4, warn);
             }
 
             if (_screen == GameScreen.Paused)
@@ -2308,7 +2509,8 @@ namespace PoliceChaser
                 Text(_mission.SuspectName + " GOT AWAY", 44, 110, new Color(255, 160, 160));
             }
 
-            Text("MISSION", 44, 128, new Color(130, 140, 175));
+            Text("STAGE " + (_mission.Index + 1) + "/" + Mission.All.Count +
+                 "   RAMS " + (_race?.Rams ?? 0), 44, 128, new Color(160, 180, 215));
             Text(_mission.Title, 44, 138, Color.White);
 
             Text("SCORE", 44, 156, new Color(130, 140, 175));
@@ -2318,8 +2520,7 @@ namespace PoliceChaser
             if (_race?.Wrecked != true)
             {
                 Text("SKILL " + DifficultyRules.Name(_difficulty), 180, 100, new Color(160, 180, 215));
-                Text("RAMS " + (_race?.Rams ?? 0), 180, 114, new Color(160, 180, 215));
-                Text("CHECKPOINTS " + (_race?.Checkpoints ?? 0), 180, 128, new Color(160, 180, 215));
+                Text("CHECKPOINTS " + (_race?.Checkpoints ?? 0), 180, 114, new Color(160, 180, 215));
             }
 
             if (Blink(2f))

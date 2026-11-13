@@ -93,7 +93,11 @@ namespace PoliceChaser.Audio
             public const float Warning = 0.40f;
         }
 
-        public float MusicVolume { get; set; } = Mix.Music;
+        /// <summary>Player setting 0..1 for music; the mix gain is applied on top.</summary>
+        public float MusicVolume { get; set; } = 1f;
+
+        /// <summary>Player setting 0..1 for every one-shot effect and the engine.</summary>
+        public float EffectsVolume { get; set; } = 1f;
 
         public ChipAudio()
         {
@@ -210,9 +214,18 @@ namespace PoliceChaser.Audio
 
             _musicInstance = effect.CreateInstance();
             _musicInstance.IsLooped = loop;
-            _musicInstance.Volume = MusicVolume;
+            _musicInstance.Volume = Mix.Music * MusicVolume;
             _musicInstance.Play();
             _currentMusic = name;
+        }
+
+        /// <summary>Re-applies the music setting to the loop that is already playing.</summary>
+        public void ApplyMusicVolume()
+        {
+            if (_musicInstance != null)
+            {
+                _musicInstance.Volume = Mix.Music * MusicVolume;
+            }
         }
 
         public void StopMusic()
@@ -244,7 +257,7 @@ namespace PoliceChaser.Audio
 
             try
             {
-                effect.Play(volume, pitch, 0f);
+                effect.Play(volume * EffectsVolume, pitch, 0f);
             }
             catch (Exception)
             {

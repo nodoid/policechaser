@@ -369,6 +369,48 @@ namespace PoliceChaser.Tests
         }
 
         [Fact]
+        public void Armed_fire_warns_before_the_round_lands()
+        {
+            Race race = new Race(Mission.ById("steelworks"), Difficulty.Beginner, 4321);
+            bool warned = false;
+            bool fired = false;
+            bool warningCameFirst = false;
+
+            for (int i = 0; i < 60 * 90 && !race.Finished; i++)
+            {
+                race.Traffic.Clear();
+                float gap = race.Gap;
+                race.Update(1f / 60f, new RaceInput
+                {
+                    Accelerate = gap > 2600f,
+                    Brake = gap < 1800f,
+                    Turbo = gap > 5500f && race.Turbo > 0.05f,
+                    Steer = Math.Clamp((race.RivalX - race.PlayerX) * 2f, -1f, 1f)
+                });
+
+                foreach (RaceEvent evt in race.Events)
+                {
+                    if (evt.Type == RaceEventType.GunfireWarning)
+                    {
+                        warned = true;
+                        if (!fired)
+                        {
+                            warningCameFirst = true;
+                        }
+                    }
+                    else if (evt.Type == RaceEventType.Gunfire)
+                    {
+                        fired = true;
+                    }
+                }
+            }
+
+            Assert.True(warned, "armed suspect never telegraphed a shot");
+            Assert.True(fired, "the telegraph was never followed by a shot");
+            Assert.True(warningCameFirst, "a shot landed before any warning");
+        }
+
+        [Fact]
         public void Armed_fire_costs_a_plate_every_third_hit()
         {
             Race race = new Race(Mission.ById("steelworks"), Difficulty.Beginner, 99);

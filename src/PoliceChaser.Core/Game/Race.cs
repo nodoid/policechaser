@@ -25,6 +25,7 @@ namespace PoliceChaser.Game
         OffRoad,
         SuspectEscaping,
         Gunfire,
+        GunfireWarning,
         PlayerHit,
         Wrecked,
         Repaired
@@ -75,6 +76,7 @@ namespace PoliceChaser.Game
         private float _escapeWarnTimer;
         private float _gunTimer;
         private int _shotsOnHull;
+        private float _gunWarning;
         private float _rivalPhase;
         private float _shake;
         private float _skid;
@@ -119,6 +121,9 @@ namespace PoliceChaser.Game
         public float Shake => _shake;
         public float Skid => _skid;
         public float Gap => RivalZ - PlayerZ;
+
+        /// <summary>Seconds left on the suspect's firing telegraph, 0 when not aiming.</summary>
+        public float GunWarning => _gunWarning;
         public float SpeedRatio => MathF.Min(1.6f, Speed / MaxSpeed);
         public bool OffRoad => MathF.Abs(PlayerX) > OffRoadLimit;
         public bool Escaping => Gap > 15000f;
@@ -329,38 +334,53 @@ namespace PoliceChaser.Game
             {
                 _gunTimer -= dt;
                 float range = RivalZ - PlayerZ;
-                if (_gunTimer <= 0f && range < 6500f && range > -1500f)
+
+                // The suspect telegraphs for sixth tenths of a second before squeezing the
+                // trigger, so a player who weaves out of the line of fire can dodge the round.
+                if (_gunWarning > 0f)
                 {
-                    _gunTimer = 1.5f + (float)_random.NextDouble() * 1.3f;
-                    Events.Add(new RaceEvent { Type = RaceEventType.Gunfire });
-
-                    // Weaving across the road makes the player a harder target.
-                    float hitChance = 0.58f - MathF.Min(0.34f, MathF.Abs(PlayerX - RivalX) * 0.35f);
-                    if (_random.NextDouble() < hitChance)
+                    _gunWarning -= dt;
+                    if (_gunWarning <= 0f)
                     {
-                        // Most rounds chew the bodywork and cost speed and clock; only every
-                        // third one punches through a plate. Single-shot damage wrecked the
-                        // armed Hard missions, where fire arrives every 1.5 seconds, before
-                        // the player could ever line up a ram.
-                        Speed *= 0.86f;
-                        TimeRemaining = MathF.Max(0.1f, TimeRemaining - 1.2f);
-                        _shake = 1f;
-                        _shotsOnHull++;
-                        if (_shotsOnHull % 3 == 0)
-                        {
-                            PlayerHealth = Math.Max(0, PlayerHealth - 1);
-                        }
+                        Events.Add(new RaceEvent { Type = RaceEventType.Gunfire });
 
-                        Events.Add(new RaceEvent { Type = RaceEventType.PlayerHit, Value = PlayerHealth });
+                        float offset = MathF.Abs(PlayerX - RivalX);
+                        float hitChance = offset >= 0.55f
+                            ? 0.04f
+                            : 0.58f - offset * 0.45f;
 
-                        if (PlayerHealth <= 0)
+                        if (_random.NextDouble() < hitChance)
                         {
-                            WreckedBy = WreckCause.Gunfire;
-                            Wrecked = true;
-                            Events.Add(new RaceEvent { Type = RaceEventType.Wrecked });
-                            return;
+                            // Most rounds chew the bodywork and cost speed and clock; only
+                            // every third one punches through a plate. Single-shot damage
+                            // wrecked the armed Hard missions, where fire arrives every 1.5
+                            // seconds, before the player could ever line up a ram.
+                            Speed *= 0.86f;
+                            TimeRemaining = MathF.Max(0.1f, TimeRemaining - 1.2f);
+                            _shake = 1f;
+                            _shotsOnHull++;
+                            if (_shotsOnHull % 3 == 0)
+                            {
+                                PlayerHealth = Math.Max(0, PlayerHealth - 1);
+                            }
+
+                            Events.Add(new RaceEvent { Type = RaceEventType.PlayerHit, Value = PlayerHealth });
+
+                            if (PlayerHealth <= 0)
+                            {
+                                WreckedBy = WreckCause.Gunfire;
+                                Wrecked = true;
+                                Events.Add(new RaceEvent { Type = RaceEventType.Wrecked });
+                                return;
+                            }
                         }
                     }
+                }
+                else if (_gunTimer <= 0f && range < 6500f && range > -1500f)
+                {
+                    _gunTimer = 1.5f + (float)_random.NextDouble() * 1.3f;
+                    _gunWarning = 0.6f;
+                    Events.Add(new RaceEvent { Type = RaceEventType.GunfireWarning });
                 }
             }
 
