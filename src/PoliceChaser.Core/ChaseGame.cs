@@ -2122,17 +2122,17 @@ namespace PoliceChaser
 
             if (_screen == GameScreen.Racing && _countdown > 0f)
             {
-                TextCentered("STAGE " + (_campaignIndex + 1) + " - " + _mission.Title, 160, 60,
+                TextCentered("STAGE " + (_campaignIndex + 1) + " - " + _mission.Title, 160, 74,
                     new Color(200, 215, 245));
 
                 int second = (int)MathF.Ceiling(_countdown);
                 if (second > 0)
                 {
-                    TextShadow(second.ToString(), 160, 84, new Color(250, 210, 80), 6);
+                    TextShadow(second.ToString(), 160, 96, new Color(250, 210, 80), 6);
                 }
                 else
                 {
-                    TextShadow("GO!", 160, 84, new Color(120, 250, 140), 5);
+                    TextShadow("GO!", 160, 96, new Color(120, 250, 140), 5);
                 }
             }
 
@@ -2317,63 +2317,75 @@ namespace PoliceChaser
 
         private void DrawHud()
         {
-            Rect(0, 0, VirtualWidth, 18, new Color(8, 10, 22));
-            Rect(0, 18, VirtualWidth, 1, new Color(60, 70, 110));
-            SirenStrip(0);
+            // Top HUD modelled on the arcade original: a white-framed score / timer / speed
+            // panel, the stage readout underneath, and the HQ video link beside it.
+            Rect(0, 0, VirtualWidth, 48, new Color(6, 8, 18));
+            HudFrame(2, 2, 220, 44, new Color(236, 240, 248));
+            HudFrame(226, 2, 92, 44, new Color(236, 240, 248));
 
-            Text("SCORE", 6, 4, new Color(140, 150, 185));
-            Text(TotalScore().ToString("D6"), 44, 4, Color.White);
+            Color label = new Color(96, 190, 214);
+            Color digits = new Color(120, 240, 255);
+            Color stage = new Color(120, 250, 140);
 
-            string missionTitle = _mission.Title;
-            TextCentered(missionTitle, 178, 4, new Color(250, 210, 80));
+            Text("SCORE", 8, 7, label);
+            Text(TotalScore().ToString("D7"), 38, 7, digits);
 
             float time = _race.TimeRemaining;
-            Color timeColor = time < 10f && Blink(4f) ? new Color(255, 90, 90) : Color.White;
-            Text("TIME", 262, 4, new Color(140, 150, 185));
-            Text(((int)MathF.Ceiling(time)).ToString("D3"), 292, 4, timeColor);
+            Color timeColor = time < 10f && Blink(4f) ? new Color(255, 90, 90) : new Color(250, 210, 80);
+            Text("TIME", 96, 7, label);
+            Text(((int)MathF.Ceiling(time)).ToString("D3"), 122, 7, timeColor);
+
+            Text("SPEED", 154, 7, label);
+            Text(((int)(_race.Speed / Race.MaxSpeed * 180f)).ToString("D3"), 192, 7, digits);
+
+            Text("STAGE", 8, 28, stage);
+            Text((_campaignIndex + 1) + "/" + Mission.All.Count, 42, 28, stage);
+
+            Text("RANGE", 96, 28, stage);
+            Text(((int)(_race.Gap / 10f)).ToString("D4") + "M", 132, 28, stage);
+
+            // HQ video link: the dispatcher above, the player below, as in the original.
+            Image(_art.HqOperator, 230, 5, 26, 16);
+            Image(_art.PlayerPortrait, 230, 25, 26, 16);
+            Text("HQ", 260, 7, new Color(120, 200, 240));
+            Text("YOU", 260, 27, new Color(180, 210, 240));
+
+            if (_radioFlash > 0f)
+            {
+                HudFrame(228, 4, 88, 20, new Color(250, 210, 80));
+            }
 
             // Bottom console.
             Rect(0, 208, VirtualWidth, VirtualHeight - 208, new Color(8, 10, 22));
             Rect(0, 208, VirtualWidth, 1, new Color(60, 70, 110));
 
-            int speedMph = (int)(_race.Speed / Race.MaxSpeed * 180f);
-            Text("MPH", 6, 212, new Color(140, 150, 185));
-            Text(speedMph.ToString("D3"), 26, 212, Color.White, 1);
-            Bar(6, 222, 96, 8, _race.Speed / Race.TurboMaxSpeed, new Color(24, 28, 44),
-                _race.SpeedRatio > 1f ? new Color(255, 160, 60) : new Color(90, 220, 140), new Color(60, 70, 110));
+            Text("TURBO", 8, 214, new Color(140, 150, 185));
+            Bar(48, 215, 100, 8, _race.Turbo, new Color(24, 28, 44),
+                new Color(80, 150, 255), new Color(60, 70, 110));
 
-            Text("TURBO", 8, 231, new Color(140, 150, 185));
-            Bar(44, 232, 52, 6, _race.Turbo, new Color(24, 28, 44), new Color(80, 150, 255), new Color(60, 70, 110));
-
-            Text("SUSPECT", 112, 212, new Color(140, 150, 185));
+            Text("SUSPECT", 160, 212, new Color(140, 150, 185));
             for (int i = 0; i < _race.RivalMaxHealth; i++)
             {
-                int x = 112 + i * 13;
+                int x = 160 + i * 13;
                 Rect(x, 222, 11, 8, i < _race.RivalHealth ? new Color(230, 60, 60) : new Color(40, 44, 60));
             }
 
-            int gap = (int)(_race.Gap / 10f);
-            Text("HULL", 112, 232, new Color(140, 150, 185));
+            Text("HULL", 160, 232, new Color(140, 150, 185));
             for (int i = 0; i < _race.PlayerMaxHealth; i++)
             {
-                Rect(134 + i * 10, 233, 7, 7,
+                Rect(186 + i * 10, 233, 7, 7,
                     i < _race.PlayerHealth ? new Color(90, 220, 140) : new Color(40, 44, 60));
             }
 
-            Text("RANGE " + gap.ToString("D4") + "M", 134 + _race.PlayerMaxHealth * 10 + 5, 232,
-                _race.Escaping ? new Color(255, 120, 120) : new Color(140, 150, 185));
-
-            Text("STAGE", 250, 212, new Color(140, 150, 185));
-            Text((_campaignIndex + 1) + "/" + Mission.All.Count, 250, 222, Color.White);
-
-            Text("HI " + _scores.BestScore().ToString("D6"), 250, 232, new Color(250, 210, 80));
+            Text("HI " + _scores.BestScore().ToString("D6"), 250, 212, new Color(250, 210, 80));
 
             if (_radioTimer > 0f && !string.IsNullOrEmpty(_radioText))
             {
-                int w = _font.Measure(_radioText, 1) + 14;
+                string message = "HQ " + _radioText;
+                int w = _font.Measure(message, 1) + 18;
                 int x = 160 - w / 2;
-                Panel(x, 24, w, 15, new Color(8, 10, 22, 230), new Color(250, 210, 80));
-                TextCentered(_radioText, 160, 28,
+                Panel(x, 51, w, 15, new Color(6, 8, 18, 235), new Color(236, 240, 248));
+                TextCentered(message, 160, 55,
                     _radioFlash > 0f ? Color.White : new Color(250, 220, 150), 1);
             }
 
@@ -2381,6 +2393,14 @@ namespace PoliceChaser
             {
                 DrawTouchControls();
             }
+        }
+
+        private void HudFrame(int x, int y, int w, int h, Color color)
+        {
+            Rect(x, y, w, 1, color);
+            Rect(x, y + h - 1, w, 1, color);
+            Rect(x, y, 1, h, color);
+            Rect(x + w - 1, y, 1, h, color);
         }
 
         // Touch pads live in the two bottom corners, under each thumb. The renderer and the hit

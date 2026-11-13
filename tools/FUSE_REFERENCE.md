@@ -33,7 +33,9 @@ python3 tools/fuse_reference.py /tmp/chasehq/chase.tap /tmp/chasehq/screens
 | Traffic to weave through, off-road slows you | `Traffic`, `OffRoad` handling |
 | Crashing into traffic costs speed, time and car damage | `TrafficHit`, hull bar, `Wrecked` |
 | Stage number and location shown before and during the chase | Briefing header, `STAGE` HUD readout, countdown banner |
-| Radio messages from dispatch | HUD radio strip |
+| Radio messages from dispatch | White HQ message bar under the HUD |
+| HQ video link: dispatcher above, player below, in a fenced panel | Procedural `HqOperator` / `PlayerPortrait` in the HUD's right-hand frame, dispatcher frame flashes on new traffic |
+| Top HUD: `SCORE / TIME / SPEED` over `GEAR / DISTANCE / STAGE` in a white frame | `SCORE / TIME / SPEED` over `STAGE / RANGE` in a white frame |
 | Turbo boost | `Turbo` meter |
 | Scoring with time bonus on a bust | `Race.RawScore` |
 

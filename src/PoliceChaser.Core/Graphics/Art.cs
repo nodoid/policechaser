@@ -295,6 +295,8 @@ namespace PoliceChaser.Graphics
         public Texture2D[] OncomingCars { get; }
         public Texture2D Badge { get; }
         public Texture2D SplashArt { get; }
+        public Texture2D HqOperator { get; }
+        public Texture2D PlayerPortrait { get; }
 
         private static readonly Color Blue = new Color(38, 78, 196);
         private static readonly Color Red = new Color(216, 48, 48);
@@ -349,6 +351,8 @@ namespace PoliceChaser.Graphics
 
             Badge = BuildBadge();
             SplashArt = BuildSplashArt();
+            HqOperator = BuildHqOperator();
+            PlayerPortrait = BuildPlayerPortrait();
         }
 
         public ThemePalette Palette(MissionTheme theme)
@@ -683,6 +687,64 @@ namespace PoliceChaser.Graphics
 
             // Bumper.
             canvas.FillRect(2, h - 6, w - 4, 4, new Color(48, 50, 62));
+
+            return canvas.ToTexture(_device);
+        }
+
+        /// <summary>HQ dispatcher at the other end of the radio, in the style of the 8-bit original.</summary>
+        private Texture2D BuildHqOperator()
+        {
+            var canvas = new Canvas(26, 18);
+            canvas.Clear(new Color(16, 22, 46));
+
+            // Shoulders and collar.
+            canvas.FillRect(2, 14, 22, 4, new Color(44, 92, 200));
+            canvas.FillRect(9, 13, 8, 2, new Color(226, 232, 244));
+
+            // Face and blonde hair.
+            canvas.FillRect(8, 4, 10, 10, new Color(236, 196, 158));
+            canvas.FillRect(6, 2, 14, 4, new Color(246, 206, 96));
+            canvas.FillRect(5, 5, 3, 7, new Color(246, 206, 96));
+            canvas.FillRect(18, 5, 3, 7, new Color(246, 206, 96));
+
+            // Headset band, earpiece, boom mic.
+            canvas.FillRect(7, 1, 12, 2, new Color(28, 32, 46));
+            canvas.FillRect(5, 6, 3, 4, new Color(28, 32, 46));
+            canvas.FillRect(18, 6, 3, 4, new Color(28, 32, 46));
+            canvas.FillRect(9, 12, 6, 1, new Color(28, 32, 46));
+            canvas.FillRect(9, 11, 2, 2, new Color(28, 32, 46));
+            canvas.Set(11, 12, new Color(230, 70, 80));
+
+            // Eyes.
+            canvas.Set(10, 8, new Color(28, 34, 52));
+            canvas.Set(15, 8, new Color(28, 34, 52));
+
+            return canvas.ToTexture(_device);
+        }
+
+        /// <summary>The player, as seen in the original's video link: cap, badge, blue uniform.</summary>
+        private Texture2D BuildPlayerPortrait()
+        {
+            var canvas = new Canvas(26, 18);
+            canvas.Clear(new Color(12, 18, 40));
+
+            // Uniform and collar.
+            canvas.FillRect(2, 14, 22, 4, new Color(32, 64, 150));
+            canvas.FillRect(9, 13, 8, 2, new Color(210, 220, 240));
+            canvas.Set(4, 15, new Color(240, 200, 90));
+
+            // Face.
+            canvas.FillRect(8, 6, 10, 9, new Color(226, 182, 142));
+
+            // Cap with a peaked brim and badge.
+            canvas.FillRect(6, 2, 14, 4, new Color(32, 64, 150));
+            canvas.FillRect(4, 5, 18, 2, new Color(24, 48, 120));
+            canvas.FillRect(12, 2, 3, 2, new Color(240, 200, 90));
+
+            // Eyes and jaw shadow.
+            canvas.Set(10, 9, new Color(28, 34, 52));
+            canvas.Set(15, 9, new Color(28, 34, 52));
+            canvas.FillRect(11, 12, 4, 1, new Color(150, 100, 80));
 
             return canvas.ToTexture(_device);
         }
