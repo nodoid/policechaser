@@ -234,6 +234,14 @@ namespace PoliceChaser
             ReadInput();
             UpdateRadio(dt);
 
+            // A portrait window cannot show the 4:3 picture usefully; hold the game on a prompt
+            // until the device or window is turned back to landscape.
+            if (PortraitWindow)
+            {
+                base.Update(gameTime);
+                return;
+            }
+
             switch (_screen)
             {
                 case GameScreen.Splash:
@@ -845,6 +853,8 @@ namespace PoliceChaser
             SetScreen(GameScreen.HighScores);
         }
 
+        private static string ConfirmPrompt => MobilePlatform ? "TAP" : "FIRE";
+
         private void UpdateHighScores()
         {
             if (_screenTime > 0.5f && (_input.Confirm || _input.Back))
@@ -897,6 +907,13 @@ namespace PoliceChaser
                     _mission = Mission.All[6];
                     SetScreen(GameScreen.Briefing);
                     break;
+                case "pads":
+                    _PointerSeen = true;
+                    _missionCursor = 0;
+                    _difficulty = Difficulty.Beginner;
+                    StartCampaign();
+                    _countdown = 0f;
+                    break;
                 case "busted":
                     _missionCursor = 0;
                     StartCampaign();
@@ -931,10 +948,141 @@ namespace PoliceChaser
                     _highlightIndex = 3;
                     SetScreen(GameScreen.HighScores);
                     break;
+                case "touch":
+                    RunTouchAudit();
+                    SetScreen(GameScreen.Title);
+                    break;
                 default:
                     SetScreen(GameScreen.Title);
                     break;
             }
+        }
+
+        private void AuditTap(int x, int y)
+        {
+            _input = default;
+            _input.Pointer = new Vector2(x, y);
+            _input.PointerDown = true;
+            _input.PointerPressed = true;
+            // ReadInput turns the first frame of a touch into a confirm; emulate that here.
+            _input.Confirm = true;
+        }
+
+        /// <summary>
+        /// Drives a tap through every interactive screen and reports pass/fail. Run with
+        /// <c>--selftest touch</c>; the audit is written next to the screenshot.
+        /// </summary>
+        private void RunTouchAudit()
+        {
+            _PointerSeen = true;
+            var lines = new List<string>();
+            int failures = 0;
+
+            void Check(string name, bool passed)
+            {
+                lines.Add((passed ? "PASS  " : "FAIL  ") + name);
+                if (!passed)
+                {
+                    failures++;
+                }
+            }
+
+            SetScreen(GameScreen.Title);
+            AuditTap(250, 198);
+            UpdateTitle();
+            Check("title: VIEW TABLE button", _screen == GameScreen.HighScores);
+
+            _screenTime = 1f;
+            AuditTap(160, 120);
+            UpdateHighScores();
+            Check("high scores: tap to return", _screen == GameScreen.Title);
+
+            AuditTap(160, 100);
+            UpdateTitle();
+            Check("title: tap to deploy", _screen == GameScreen.DifficultySelect);
+
+            AuditTap(160, 145);
+            UpdateDifficultySelect();
+            Check("skill: tap second row", _screen == GameScreen.MissionSelect && _difficultyCursor == 1);
+
+            Rectangle card = MissionCards()[4];
+            AuditTap(card.Center.X, card.Center.Y);
+            UpdateMissionSelect();
+            Check("mission: tap fifth card", _screen == GameScreen.Briefing && _missionCursor == 4);
+
+            AuditTap(160, 120);
+            UpdateBriefing();
+            Check("briefing: tap to start", _screen == GameScreen.Racing);
+
+            InputFrame pad = default;
+            ApplyRacingTouch(ref pad, new Vector2(SteerLeftPad.Center.X, SteerLeftPad.Center.Y), true);
+            Check("race: left pad steers left", pad.Steer < -0.9f);
+
+            pad = default;
+            ApplyRacingTouch(ref pad, new Vector2(SteerRightPad.Center.X, SteerRightPad.Center.Y), true);
+            Check("race: right pad steers right", pad.Steer > 0.9f);
+
+            pad = default;
+            ApplyRacingTouch(ref pad, new Vector2(TurboPad.Center.X, TurboPad.Center.Y), true);
+            Check("race: TURBO pad", pad.Turbo);
+
+            pad = default;
+            ApplyRacingTouch(ref pad, new Vector2(BrakePad.Center.X, BrakePad.Center.Y), true);
+            Check("race: BRK pad", pad.Brake);
+
+            pad = default;
+            ApplyRacingTouch(ref pad, new Vector2(280, 130), true);
+            Check("race: drag right steers", pad.Steer > 0.9f);
+
+            SetScreen(GameScreen.Busted);
+            AuditTap(160, 120);
+            UpdateBusted();
+            Check("busted: tap to continue", _screen == GameScreen.MissionCleared);
+
+            _screenTime = 2f;
+            AuditTap(160, 120);
+            UpdateMissionCleared();
+            Check("mission cleared: tap to continue", _screen == GameScreen.Racing);
+
+            SetScreen(GameScreen.GameOver);
+            _campaignRaw = 18450;
+            _screenTime = 2f;
+            AuditTap(160, 120);
+            UpdateGameOver();
+            Check("game over: tap to file the score", _screen == GameScreen.NameEntry);
+
+            char before = _nameLetters[0];
+            AuditTap(NameUpButton.Center.X, NameUpButton.Center.Y);
+            UpdateNameEntry();
+            Check("name entry: UP key changes the letter", _nameLetters[0] != before);
+
+            AuditTap(NameBox(2).Center.X, NameBox(2).Center.Y);
+            UpdateNameEntry();
+            Check("name entry: letter box selects", _nameCursor == 2);
+
+            AuditTap(NameOkButton.Center.X, NameOkButton.Center.Y);
+            UpdateNameEntry();
+            Check("name entry: OK submits", _screen == GameScreen.HighScores);
+
+            SetScreen(GameScreen.Paused);
+            AuditTap(160, 120);
+            UpdatePaused();
+            Check("pause: tap to resume", _screen == GameScreen.Racing);
+
+            lines.Add(failures == 0
+                ? "ALL " + lines.Count + " TOUCH CHECKS PASSED"
+                : failures + " OF " + lines.Count + " TOUCH CHECKS FAILED");
+
+            try
+            {
+                File.WriteAllLines(_selfTestPath + ".audit.txt", lines);
+            }
+            catch (Exception)
+            {
+                // Diagnostics must never stop the game.
+            }
+
+            Console.WriteLine(string.Join(Environment.NewLine, lines));
         }
 
         private void SeedSelfTestScores()
@@ -1104,31 +1252,27 @@ namespace PoliceChaser
 
         private void ApplyRacingTouch(ref InputFrame frame, Vector2 pointer, bool down)
         {
-            const int buttonY = 170;
-            var leftZone = new Rectangle(4, buttonY, 64, 62);
-            var rightZone = new Rectangle(72, buttonY, 64, 62);
-            var turboZone = new Rectangle(250, buttonY, 64, 62);
-            var brakeZone = new Rectangle(196, buttonY + 22, 46, 40);
-
             if (!down)
             {
                 return;
             }
 
-            if (turboZone.Contains(pointer.ToPoint()))
+            Point point = pointer.ToPoint();
+
+            if (TurboPad.Contains(point))
             {
                 frame.Turbo = true;
             }
-            else if (brakeZone.Contains(pointer.ToPoint()))
+            else if (BrakePad.Contains(point))
             {
                 frame.Brake = true;
                 frame.Steer = 0f;
             }
-            else if (leftZone.Contains(pointer.ToPoint()))
+            else if (SteerLeftPad.Contains(point))
             {
                 frame.Steer = -1f;
             }
-            else if (rightZone.Contains(pointer.ToPoint()))
+            else if (SteerRightPad.Contains(point))
             {
                 frame.Steer = 1f;
             }
@@ -1175,7 +1319,11 @@ namespace PoliceChaser
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
                 DepthStencilState.None, RasterizerState.CullNone);
 
-            switch (_screen)
+            if (PortraitWindow)
+            {
+                DrawRotatePrompt();
+            }
+            else switch (_screen)
             {
                 case GameScreen.Splash:
                     DrawSplash();
@@ -1403,6 +1551,22 @@ namespace PoliceChaser
             }
         }
 
+        private bool PortraitWindow =>
+            GraphicsDevice.PresentationParameters.BackBufferHeight >
+            GraphicsDevice.PresentationParameters.BackBufferWidth;
+
+        private void DrawRotatePrompt()
+        {
+            Background(MissionTheme.Neon);
+            SirenStrip(0);
+
+            Panel(30, 74, 260, 92, new Color(8, 10, 26, 240), new Color(250, 210, 80));
+            TextShadow("ROTATE DEVICE", 160, 88, new Color(250, 220, 120), 2);
+            TextCentered("POLICE CHASER IS PLAYED IN LANDSCAPE", 160, 118, new Color(170, 190, 230));
+            TextCentered("TURN THE DEVICE SIDEWAYS", 160, 132, new Color(150, 170, 210));
+            TextCentered("THE 4:3 PICTURE SCALES TO FIT THE SCREEN", 160, 146, new Color(120, 140, 175));
+        }
+
         // ------------------------------------------------------------------ title
 
         private void DrawTitle()
@@ -1436,12 +1600,12 @@ namespace PoliceChaser
 
             if (Blink(2.2f))
             {
-                TextCentered("PRESS FIRE TO DEPLOY", 160, 164, Color.White);
+                TextCentered(ConfirmPrompt + " TO DEPLOY", 160, 164, Color.White);
             }
 
             if (MobilePlatform)
             {
-                TextCentered("TAP TO DEPLOY", 110, 176, new Color(140, 200, 250));
+                TextCentered("ON-SCREEN PADS IN RACE", 160, 190, new Color(120, 160, 210));
             }
 
             ScoreEntry best = _scores.Table.Best();
@@ -1665,7 +1829,8 @@ namespace PoliceChaser
             {
                 Rect(0, 0, VirtualWidth, VirtualHeight, new Color(0, 0, 0, 170));
                 TextShadow("PAUSED", 160, 100, Color.White, 4);
-                TextCentered("FIRE TO RESUME - BACK TO QUIT", 160, 140, new Color(190, 200, 230));
+                TextCentered(MobilePlatform ? "TAP TO RESUME" : "FIRE TO RESUME - BACK TO QUIT", 160, 140,
+                    new Color(190, 200, 230));
             }
         }
 
@@ -1871,32 +2036,36 @@ namespace PoliceChaser
                     _radioFlash > 0f ? Color.White : new Color(250, 220, 150), 1);
             }
 
-            if (MobilePlatform && _PointerSeen && _screen != GameScreen.Paused)
+            if (_PointerSeen && _screen != GameScreen.Paused && (MobilePlatform || _selfTest))
             {
                 DrawTouchControls();
             }
         }
 
+        // Touch pads live in the two bottom corners, under each thumb. The renderer and the hit
+        // test share these rectangles so a button can never drift away from where it is drawn.
+        private static readonly Rectangle SteerLeftPad = new Rectangle(4, 146, 60, 60);
+        private static readonly Rectangle SteerRightPad = new Rectangle(68, 146, 60, 60);
+        private static readonly Rectangle BrakePad = new Rectangle(198, 146, 48, 60);
+        private static readonly Rectangle TurboPad = new Rectangle(250, 146, 64, 60);
+
         private void DrawTouchControls()
         {
-            var left = new Rectangle(4, 170, 64, 62);
-            var right = new Rectangle(72, 170, 64, 62);
-            var turbo = new Rectangle(250, 170, 64, 62);
-            var brake = new Rectangle(196, 192, 46, 40);
-
-            DrawTouchPad(left, "<");
-            DrawTouchPad(right, ">");
-            DrawTouchPad(turbo, "TURBO");
-            DrawTouchPad(brake, "BRK");
+            DrawTouchPad(SteerLeftPad, "<", 2);
+            DrawTouchPad(SteerRightPad, ">", 2);
+            DrawTouchPad(BrakePad, "BRK", 1);
+            DrawTouchPad(TurboPad, "TURBO", 1);
         }
 
-        private void DrawTouchPad(Rectangle rectangle, string label)
+        private void DrawTouchPad(Rectangle rectangle, string label, int scale)
         {
-            Rect(rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height, new Color(20, 26, 44, 120));
-            Rect(rectangle.X, rectangle.Y, rectangle.Width, 1, new Color(120, 150, 210, 130));
-            Rect(rectangle.X, rectangle.Y + rectangle.Height - 1, rectangle.Width, 1, new Color(120, 150, 210, 130));
-            TextCentered(label, rectangle.X + rectangle.Width / 2, rectangle.Y + rectangle.Height / 2 - 3,
-                new Color(180, 210, 250, 190), label.Length > 2 ? 1 : 2);
+            Rect(rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height, new Color(10, 16, 32, 150));
+            Rect(rectangle.X, rectangle.Y, rectangle.Width, 2, new Color(150, 185, 245, 210));
+            Rect(rectangle.X, rectangle.Y + rectangle.Height - 2, rectangle.Width, 2, new Color(150, 185, 245, 210));
+            Rect(rectangle.X, rectangle.Y, 2, rectangle.Height, new Color(150, 185, 245, 210));
+            Rect(rectangle.X + rectangle.Width - 2, rectangle.Y, 2, rectangle.Height, new Color(150, 185, 245, 210));
+            TextCentered(label, rectangle.X + rectangle.Width / 2,
+                rectangle.Y + rectangle.Height / 2 - (scale > 1 ? 6 : 2), new Color(220, 235, 255, 240), scale);
         }
 
         private int TotalScore()
@@ -1919,7 +2088,7 @@ namespace PoliceChaser
 
             if (Blink(3f))
             {
-                TextCentered("FIRE TO CONTINUE", 160, 138 + wobble, new Color(180, 200, 240));
+                TextCentered(ConfirmPrompt + " TO CONTINUE", 160, 138 + wobble, new Color(180, 200, 240));
             }
         }
 
@@ -1940,7 +2109,7 @@ namespace PoliceChaser
 
             if (Blink(2.5f))
             {
-                TextCentered("FIRE TO CONTINUE", 160, 148, new Color(180, 200, 240));
+                TextCentered(ConfirmPrompt + " TO CONTINUE", 160, 148, new Color(180, 200, 240));
             }
         }
 
@@ -1963,7 +2132,7 @@ namespace PoliceChaser
 
             if (Blink(2f))
             {
-                TextCentered("FIRE TO FILE THE REPORT", 160, 176, new Color(200, 220, 250));
+                TextCentered(ConfirmPrompt + " TO FILE THE REPORT", 160, 176, new Color(200, 220, 250));
             }
         }
 
@@ -2010,7 +2179,7 @@ namespace PoliceChaser
 
             if (Blink(2f))
             {
-                TextCentered("FIRE TO SEE THE HIGH SCORES", 160, 190, new Color(210, 225, 250));
+                TextCentered(ConfirmPrompt + " TO SEE THE HIGH SCORES", 160, 190, new Color(210, 225, 250));
             }
         }
 
@@ -2109,7 +2278,7 @@ namespace PoliceChaser
             TextCentered("TOP 10 - SCORE IS WEIGHTED BY SKILL", 160, 200, new Color(140, 150, 185));
             if (Blink(2f))
             {
-                TextCentered("FIRE TO RETURN", 160, 218, Color.White);
+                TextCentered(ConfirmPrompt + " TO RETURN", 160, 218, Color.White);
             }
         }
 

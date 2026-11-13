@@ -151,8 +151,14 @@ dotnet run --project src/PoliceChaser.Desktop -- --selftest race --frames 200 --
 ```
 
 Screens: `splash`, `title`, `difficulty`, `mission`, `briefing`, `briefing2`, `race`, `race2`,
-`race3`, `busted`, `gameover`, `name`, `nametap`, `scores`. `nametap` feeds one simulated touch
-tap through the name-entry keys, which is how the mobile letter picker is smoke tested.
+`race3`, `pads`, `busted`, `gameover`, `name`, `nametap`, `touch`, `scores`. `pads` shows the race
+with the touch overlay forced on, for checking the on-screen controls on a desktop build. `nametap` feeds one simulated
+touch tap through the name-entry keys, and `touch` drives a tap through every interactive screen
+(title, high scores, skill, mission, briefing, pause, busted, game over and name entry) and prints
+a pass/fail audit to `<shot>.audit.txt`.
+
+The game is landscape only. A portrait window shows a rotate prompt instead of a tiny, squashed
+picture, and the 4:3 canvas is scaled to the largest size the window allows.
 
 ## Layout
 
