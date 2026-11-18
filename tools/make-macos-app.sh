@@ -97,6 +97,31 @@ if [[ "${1:-}" == "--sign" ]]; then
     --sign "$IDENTITY" \
     "$APP"
 
+  # Bundled helper executables (the .NET createdump tool) must be sandboxed as well,
+  # or App Store validation rejects the package with 90296. They get the sandbox key
+  # without the App ID, so they still need no provisioning profile.
+  NESTED_ENTITLEMENTS="$OUT/nested-entitlements.plist"
+  cat > "$NESTED_ENTITLEMENTS" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.app-sandbox</key>
+  <true/>
+</dict>
+</plist>
+PLIST
+
+  while IFS= read -r -d '' nested; do
+    case "$(file -b "$nested")" in
+      *Mach-O*executable*)
+        codesign --force --options runtime --timestamp=none \
+          --sign "$IDENTITY" \
+          --entitlements "$NESTED_ENTITLEMENTS" \
+          "$nested" ;;
+    esac
+  done < <(find "$APP/Contents/MacOS" -type f -print0 | sort -z)
+
   # The second pass re-signs the bundle itself, so the main executable -- and only
   # it -- carries the App ID, team identifier and sandbox entitlements the profile
   # describes. Deliberately no --deep here.
