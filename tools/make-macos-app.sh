@@ -88,7 +88,19 @@ fi
 if [[ "${1:-}" == "--sign" ]]; then
   IDENTITY="${IDENTITY:-Apple Development}"
   echo "== signing with $IDENTITY =="
+
+  # Two passes. The first seals every nested file (dylibs and the managed
+  # assemblies, which codesign also treats as nested code) with no entitlements:
+  # `--deep` copies the entitlements it is given, and App Store Connect then wants
+  # a provisioning profile for each nested executable carrying an App ID (90885).
   codesign --force --deep --options runtime --timestamp=none \
+    --sign "$IDENTITY" \
+    "$APP"
+
+  # The second pass re-signs the bundle itself, so the main executable -- and only
+  # it -- carries the App ID, team identifier and sandbox entitlements the profile
+  # describes. Deliberately no --deep here.
+  codesign --force --options runtime --timestamp=none \
     --sign "$IDENTITY" \
     --entitlements "$ENTITLEMENTS" \
     "$APP"
