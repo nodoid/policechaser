@@ -85,6 +85,11 @@ PY
   ENTITLEMENTS="$OUT/entitlements.plist"
 fi
 
+# The provisioning profile is downloaded from the developer portal and carries
+# com.apple.quarantine, which TestFlight and the App Store reject in a payload
+# (ITMS-91109). Strip every extended attribute before signing seals the bundle.
+xattr -cr "$APP"
+
 if [[ "${1:-}" == "--sign" ]]; then
   IDENTITY="${IDENTITY:-Apple Development}"
   echo "== signing with $IDENTITY =="
