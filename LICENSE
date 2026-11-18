@@ -1,0 +1,38 @@
+THE DILLIGAF LICENCE
+DILLIGAF = "Do I Look Like I Give A F***"
+
+Version 1, November 2026
+Copyright (c) 2026 the Police Chaser authors
+
+Police Chaser - the source, the assets, the tools and the documentation.
+
+Permission to use, copy, modify, merge, publish, distribute, sublicense,
+sell, port, mangle, obfuscate, print on a mug or feed to a compiler you
+do not trust is granted, free of charge, to anybody who wants it.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE AND
+NON-INFRINGEMENT, AND ANY WARRANTY THAT THE GAME WILL RUN ON YOUR PHONE
+OR THAT YOUR HIGH SCORE WILL SURVIVE.  IN NO EVENT SHALL THE AUTHORS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE, THE USE OF THE SOFTWARE, OR THE TERRIBLE LINE YOU
+PICKED THROUGH THE TRAFFIC.
+
+NO ATTRIBUTION IS REQUIRED.  No copyright notice has to be kept, no
+"based on" line has to be added, and nobody has to ask first - that is
+the whole point of the licence.
+
+WHERE THE LAW WILL NOT ALLOW THE ABOVE - implied warranties that cannot
+be disclaimed, moral rights, a jurisdiction that wants something more
+formal - the same answer applies: take the widest permission that
+jurisdiction permits, and accept no liability beyond the price you paid
+for the game, which was nothing.
+
+THIRD-PARTY BITS keep their own licences and are not relicensed here:
+the MonoGame framework is MS-PL, and the Chakra Petch typeface is under
+the SIL Open Font Licence, full text in
+src/PoliceChaser.Core/Graphics/Fonts/OFL.txt.
+
+Do I look like I give a f***?  No.  Now go and ram that suspect.

@@ -6,6 +6,8 @@ macOS 26+ and Windows 11**, built with MonoGame and .NET 10. It is a faithful in
 clock, checkpoints, traffic and a radio - with smooth high-resolution graphics, new sound,
 nine missions across two series, three skill levels and a persistent high score table.
 
+![Closing on the suspect through a rain-soaked Series II stage](docs/screenshot.png)
+
 All art is baked at 4x and the game renders to a 1280x960 target that is smoothly scaled to
 the window or device, so it is not an upscaled 320x240 picture: text, road, scenery and cars
 are all drawn at full resolution on every platform. On phones the target is widened to the
@@ -191,8 +193,14 @@ src/PoliceChaser.Desktop     Windows / macOS / Linux host
 src/PoliceChaser.Android     Android host (API 32 minimum, target 36)
 src/PoliceChaser.iOS         iOS host (18+)
 src/PoliceChaser.macOS       macOS signing entitlements
-tests/PoliceChaser.Tests     xunit suite
-assets/                      generated icon master, .icns, Windows logos
+tests/PoliceChaser.Tests     xunit suiteassets/                      generated icon master, .icns, Windows logos
+docs/                        screenshot used by this README
 tools/                       icon generation, packaging, Fuse reference helpers
-windows/                     MSIX manifest (reserved Microsoft identity)
+windows/                      MSIX manifest (reserved Microsoft identity)
 ```
+
+## Licence
+
+The DILLIGAF licence (Do I Look Like I Give A F***): do what you like with it - copy, change,
+sell, port it - with no attribution and no warranty. The full text is in `LICENSE`. It is not
+an OSI-approved licence, which will surprise nobody.
