@@ -57,11 +57,22 @@ For macOS, `tools/make-macos-app.sh` publishes the desktop build and wraps it in
 tools/make-macos-app.sh                                  # ad-hoc signed, runs locally
 tools/make-macos-app.sh --sign                           # signed with an installed identity
 IDENTITY="Apple Development: ..." tools/make-macos-app.sh --sign
-RID=osx-x64 tools/make-macos-app.sh
+SELF_CONTAINED=1 tools/make-macos-app.sh --sign           # bundles the .NET runtime
+RID=osx-x64 SELF_CONTAINED=1 tools/make-macos-app.sh
 ```
 
 `--sign` uses `src/PoliceChaser.macOS/entitlements.plist` (sandbox, no network) and signs with
-the `IDENTITY` you provide or the string `Apple Development`.
+the `IDENTITY` you provide or the string `Apple Development`. `SELF_CONTAINED=1` bundles the
+.NET runtime so the `.app` runs on a Mac without the SDK installed; the default build is
+framework-dependent and needs the .NET 10 runtime.
+
+Release installers are built from the signed `.app` with `productbuild`:
+
+```bash
+productbuild --component "artifacts/macos/osx-arm64/Police Chaser.app" /Applications \
+  --sign "3rd Party Mac Developer Installer: <your name> (<TEAMID>)" \
+  releases/PoliceChaser-<version>-macos-arm64.pkg
+```
 
 ## Android
 
