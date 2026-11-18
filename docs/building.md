@@ -59,12 +59,20 @@ tools/make-macos-app.sh --sign                           # signed with an instal
 IDENTITY="Apple Development: ..." tools/make-macos-app.sh --sign
 SELF_CONTAINED=1 tools/make-macos-app.sh --sign           # bundles the .NET runtime
 RID=osx-x64 SELF_CONTAINED=1 tools/make-macos-app.sh
+
+# Mac App Store build: embed the distribution profile and sign with it
+PROFILE=~/Downloads/rel-police-mac.provisionprofile SELF_CONTAINED=1 \
+  IDENTITY="Apple Distribution: ..." tools/make-macos-app.sh --sign
 ```
 
 `--sign` uses `src/PoliceChaser.macOS/entitlements.plist` (sandbox, no network) and signs with
 the `IDENTITY` you provide or the string `Apple Development`. `SELF_CONTAINED=1` bundles the
 .NET runtime so the `.app` runs on a Mac without the SDK installed; the default build is
 framework-dependent and needs the .NET 10 runtime.
+
+The App Store build needs `PROFILE` (`rel-police-mac`): it is copied to
+`Contents/embedded.provisionprofile`, and its App ID and team identifier are merged into the
+signing entitlements, so the signed app matches the profile without a team ID in the repo.
 
 Release installers are built from the signed `.app` with `productbuild`:
 

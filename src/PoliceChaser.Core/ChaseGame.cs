@@ -109,6 +109,11 @@ namespace PoliceChaser
         private int _selfTestFrame;
         private bool _selfTestTapped;
         private bool _selfTestCaptured;
+        private string _videoDir;
+        private int _videoWarmup;
+        private int _videoFrames;
+        private int _videoFrame;
+        private int _videoFps = 30;
 
         private struct InputFrame
         {
@@ -299,6 +304,20 @@ namespace PoliceChaser
             _selfTestPath = string.IsNullOrEmpty(shotPath) ? "selftest.png" : shotPath;
         }
 
+        /// <summary>
+        /// Configuration hook for the store gameplay videos: renders a fixed number of frames at
+        /// a fixed timestep, writes each one as a PNG into <paramref name="directory"/> and exits.
+        /// The fixed step keeps the footage identical no matter how long a capture takes.
+        /// </summary>
+        public void EnableSelfTestVideo(string screen, int warmupFrames, int frames, int fps, string directory)
+        {
+            EnableSelfTest(screen, int.MaxValue, "selftest.png");
+            _videoDir = directory;
+            _videoWarmup = Math.Max(0, warmupFrames);
+            _videoFrames = Math.Max(1, frames);
+            _videoFps = Math.Max(1, fps);
+        }
+
         // ===================================================================== update
 
         protected override void Update(GameTime gameTime)
@@ -336,6 +355,13 @@ namespace PoliceChaser
             if (dt > 0.1f)
             {
                 dt = 0.1f;
+            }
+
+            // The video harness advances on a fixed step so the footage does not depend on how
+            // long capturing a frame takes.
+            if (_videoDir != null)
+            {
+                dt = 1f / _videoFps;
             }
 
             _time += dt;
@@ -1580,6 +1606,14 @@ namespace PoliceChaser
 
         private void UpdateSelfTest(float dt)
         {
+            // The store footage runs continuously: a bust or game-over card would otherwise
+            // sit static for the rest of the clip.
+            if (_videoDir != null && (_screen == GameScreen.Busted || _screen == GameScreen.GameOver))
+            {
+                StartCampaign();
+                _countdown = 0f;
+            }
+
             // Feeds one real touch tap through the name-entry handler so the mobile keys can be
             // checked without a phone in hand.
             if (_selfTestScreen == "nametap" && !_selfTestTapped && _screenTime > 0.1f)
@@ -1595,7 +1629,11 @@ namespace PoliceChaser
 
             if (_screen == GameScreen.Racing && _race != null)
             {
-                _input.Steer = MathF.Sin(_screenTime * 1.25f) * 0.3f;
+                // The store footage holds the lane; smoke tests keep weaving so the capture
+                // covers more of the road.
+                _input.Steer = _videoDir != null
+                    ? Math.Clamp(-_race.PlayerX * 0.9f, -1f, 1f)
+                    : MathF.Sin(_screenTime * 1.25f) * 0.3f;
                 _input.Turbo = _screenTime > 1.2f;
                 _input.Brake = false;
                 UpdateRacing(dt);
@@ -1639,6 +1677,44 @@ namespace PoliceChaser
             // iOS forbids programmatic termination; the harness only runs on desktop anyway.
             Exit();
 #endif
+        }
+
+        /// <summary>Writes the next video frame, then stops the game once the run is complete.</summary>
+        private void CaptureVideoFrame()
+        {
+            if (_videoFrame >= _videoFrames)
+            {
+                _selfTestCaptured = true;
+                return;
+            }
+
+            int width = GraphicsDevice.PresentationParameters.BackBufferWidth;
+            int height = GraphicsDevice.PresentationParameters.BackBufferHeight;
+            var data = new Color[width * height];
+
+            try
+            {
+                System.IO.Directory.CreateDirectory(_videoDir);
+                GraphicsDevice.GetBackBufferData(data);
+                PngWriter.Write(
+                    System.IO.Path.Combine(_videoDir, "frame-" + _videoFrame.ToString("D5") + ".png"),
+                    width, height, data);
+            }
+            catch (Exception ex)
+            {
+                WriteCrash("VideoCapture", ex);
+                _selfTestCaptured = true;
+                return;
+            }
+
+            _videoFrame++;
+            if (_videoFrame >= _videoFrames)
+            {
+                _selfTestCaptured = true;
+#if !IOS
+                Exit();
+#endif
+            }
         }
 
         // ===================================================================== input
@@ -1893,7 +1969,14 @@ namespace PoliceChaser
             if (_selfTest && !_selfTestCaptured)
             {
                 _selfTestFrame++;
-                if (_selfTestFrame >= _selfTestFrames)
+                if (_videoDir != null)
+                {
+                    if (_selfTestFrame > _videoWarmup)
+                    {
+                        CaptureVideoFrame();
+                    }
+                }
+                else if (_selfTestFrame >= _selfTestFrames)
                 {
                     _selfTestCaptured = true;
                     CaptureSelfTest();

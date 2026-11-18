@@ -7,11 +7,14 @@
     <RootNamespace>PoliceChaser.iOS</RootNamespace>
     <AssemblyName>PoliceChaser</AssemblyName>
     <ApplicationTitle>Police Chaser</ApplicationTitle>
-    <ApplicationVersion>2</ApplicationVersion>
+    <ApplicationVersion>3</ApplicationVersion>
     <ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>
     <CodesignKey>Apple Development</CodesignKey>
     <CodesignProvision>devel-police</CodesignProvision>
     <MtouchLink>SdkOnly</MtouchLink>
+    <!-- Tells actool which asset catalog is the app icon, so it generates every
+         device size and writes CFBundleIconName into the Info.plist. -->
+    <AppIcon>AppIcon</AppIcon>
   </PropertyGroup>
 
   <ItemGroup>

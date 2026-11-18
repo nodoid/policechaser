@@ -45,6 +45,23 @@ The script builds the desktop project in `Debug` and then drives `dotnet run --n
 screen. The harness opens a window, so this is not a headless renderer: run it on a machine with
 a display.
 
+## `gen_gameplay_videos.py` - store gameplay videos
+
+```bash
+python3 tools/gen_gameplay_videos.py
+```
+
+Captures two twelve-second clips at a fixed timestep and encodes them with `ffmpeg` (required):
+
+| Output | Size | Shows |
+| --- | --- | --- |
+| `~/Movies/PoliceChaser-macos-gameplay.mp4` | 1920x1080, 30 fps | Rear-view pursuit |
+| `~/Movies/PoliceChaser-ipad-gameplay.mp4` | 1920x1080, 30 fps | Pursuit with the touch pads |
+
+Frames are captured into `artifacts/video-frames/<name>` and deleted once the video is written, so
+the videos are the only output. The script shares its framing with `gen_screenshots.py`, and the
+window must be on screen, as with the screenshot tool.
+
 ## `gen_store_assets.py` - store listing art
 
 ```bash
@@ -105,6 +122,13 @@ dotnet run --project src/PoliceChaser.Desktop -- --selftest race --frames 200 --
 | `--selftest <screen>` | - | Screen to show, then exit |
 | `--frames N` | 90 | Frames to simulate before capturing |
 | `--shot path` | `selftest.png` | PNG to write |
+| `--video dir` | - | Write a PNG sequence to `dir` instead of one shot |
+| `--video-warmup N` | 0 | Frames to simulate before the first capture |
+| `--video-frames N` | 0 | Frames to capture (required with `--video`) |
+| `--fps N` | 30 | Fixed timestep and sequence rate |
+
+`--video` runs the capture on a fixed timestep, so the footage is the same however long writing a
+frame takes; `tools/gen_gameplay_videos.py` drives it.
 
 Screens: `splash`, `title`, `difficulty`, `mission`, `briefing`, `briefing2`, `race`, `race2`,
 `race3`, `crash`, `wreck`, `pads`, `busted`, `gameover`, `name`, `nametap`, `touch`, `scores`,

@@ -2,14 +2,18 @@
 # Publishes the desktop build and wraps it in a macOS .app bundle.
 #
 #   tools/make-macos-app.sh                 # ad-hoc signed, runnable locally
-#   tools/make-macos-app.sh --sign          # sign with the installed dev identity/profile
+#   tools/make-macos-app.sh --sign          # sign with the installed dev identity
 #   RID=osx-x64 tools/make-macos-app.sh
+#
+#   PROFILE=~/Downloads/rel-police-mac.provisionprofile \
+#     IDENTITY="Apple Distribution: ..." tools/make-macos-app.sh --sign  # App Store build
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RID="${RID:-osx-arm64}"
 VERSION="${VERSION:-1.0.1}"
 SELF_CONTAINED="${SELF_CONTAINED:-0}"
+PROFILE="${PROFILE:-}"
 BUNDLE_ID="uk.co.allthejohnsons.policechaser"
 APP_NAME="Police Chaser"
 OUT="$ROOT/artifacts/macos/$RID"
@@ -55,12 +59,38 @@ PLIST
 
 chmod +x "$APP/Contents/MacOS/PoliceChaser"
 
+ENTITLEMENTS="$ROOT/src/PoliceChaser.macOS/entitlements.plist"
+if [[ -n "$PROFILE" ]]; then
+  [[ -f "$PROFILE" ]] || { echo "provisioning profile not found: $PROFILE" >&2; exit 1; }
+  PROFILE="$(cd "$(dirname "$PROFILE")" && pwd)/$(basename "$PROFILE")"
+  echo "== embedding $(basename "$PROFILE") =="
+  ditto --norsrc --noextattr "$PROFILE" "$APP/Contents/embedded.provisionprofile"
+
+  # The profile carries the App ID and team identifier; the app plist carries
+  # the sandbox keys. Sign with both so the signature matches the profile, and
+  # keep the team ID out of the repository.
+  security cms -D -i "$PROFILE" > "$OUT/profile.plist"
+  python3 - "$OUT/profile.plist" "$ENTITLEMENTS" "$OUT/entitlements.plist" <<'PY'
+import plistlib
+import sys
+
+with open(sys.argv[1], "rb") as handle:
+    profile = plistlib.load(handle)
+with open(sys.argv[2], "rb") as handle:
+    entitlements = plistlib.load(handle)
+entitlements.update(profile.get("Entitlements", {}))
+with open(sys.argv[3], "wb") as handle:
+    plistlib.dump(entitlements, handle)
+PY
+  ENTITLEMENTS="$OUT/entitlements.plist"
+fi
+
 if [[ "${1:-}" == "--sign" ]]; then
   IDENTITY="${IDENTITY:-Apple Development}"
   echo "== signing with $IDENTITY =="
   codesign --force --deep --options runtime --timestamp=none \
     --sign "$IDENTITY" \
-    --entitlements "$ROOT/src/PoliceChaser.macOS/entitlements.plist" \
+    --entitlements "$ENTITLEMENTS" \
     "$APP"
 else
   echo "== ad-hoc signing =="

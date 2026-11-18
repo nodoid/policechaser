@@ -73,27 +73,33 @@ def capture(screen, frames):
     return target
 
 
-def normalize(path):
-    """Crop the window's pillarboxes and store the capture at the 4:3 canvas size.
+def fit_canvas(img):
+    """Crop the window's pillarboxes so the capture is the 4:3 canvas size.
 
     The desktop window can be shorter than the preferred 960px backbuffer (menu bar
     or dock), so the game letterboxes its canvas inside it.
     """
+    width, height = img.size
+    if (width, height) == (GAME_W, GAME_H):
+        return img
+
+    if width * GAME_H > height * GAME_W:
+        crop_w = round(height * GAME_W / GAME_H)
+        left = (width - crop_w) // 2
+        box = (left, 0, left + crop_w, height)
+    else:
+        crop_h = round(width * GAME_H / GAME_W)
+        top = (height - crop_h) // 2
+        box = (0, top, width, top + crop_h)
+
+    return img.crop(box).resize((GAME_W, GAME_H), Image.Resampling.LANCZOS)
+
+
+def normalize(path):
+    """Crop a capture to the 4:3 canvas size and write it back in place."""
     with Image.open(path) as img:
-        width, height = img.size
-        if (width, height) == (GAME_W, GAME_H):
-            return
-
-        if width * GAME_H > height * GAME_W:
-            crop_w = round(height * GAME_W / GAME_H)
-            left = (width - crop_w) // 2
-            box = (left, 0, left + crop_w, height)
-        else:
-            crop_h = round(width * GAME_H / GAME_W)
-            top = (height - crop_h) // 2
-            box = (0, top, width, top + crop_h)
-
-        img.crop(box).resize((GAME_W, GAME_H), Image.Resampling.LANCZOS).save(path)
+        if img.size != (GAME_W, GAME_H):
+            fit_canvas(img).save(path)
 
 
 def compose(shot_path, caption, out_path):

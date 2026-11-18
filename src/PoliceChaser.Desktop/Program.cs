@@ -10,7 +10,9 @@ namespace PoliceChaser.Desktop
         /// <summary>
         /// Entry point. Optional switches are used by the build's smoke tests:
         ///   --selftest &lt;screen&gt; [--frames N] [--shot path]
-        /// The game renders normally and writes one PNG frame, then exits.
+        ///   --selftest &lt;screen&gt; --video &lt;dir&gt; [--video-warmup N] [--video-frames N] [--fps N]
+        /// The game renders normally and writes one PNG frame, then exits; the video form writes
+        /// a fixed-timestep PNG sequence instead.
         /// </summary>
         [STAThread]
         public static int Main(string[] args)
@@ -29,6 +31,10 @@ namespace PoliceChaser.Desktop
             string screen = null;
             int frames = 90;
             string shot = null;
+            string video = null;
+            int videoWarmup = 0;
+            int videoFrames = 0;
+            int fps = 30;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -57,6 +63,40 @@ namespace PoliceChaser.Desktop
                         }
 
                         break;
+                    case "--video":
+                        if (i + 1 < args.Length)
+                        {
+                            video = args[++i];
+                        }
+
+                        break;
+                    case "--video-warmup":
+                        if (i + 1 < args.Length &&
+                            int.TryParse(args[i + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int warmup))
+                        {
+                            videoWarmup = warmup;
+                            i++;
+                        }
+
+                        break;
+                    case "--video-frames":
+                        if (i + 1 < args.Length &&
+                            int.TryParse(args[i + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int captureFrames))
+                        {
+                            videoFrames = captureFrames;
+                            i++;
+                        }
+
+                        break;
+                    case "--fps":
+                        if (i + 1 < args.Length &&
+                            int.TryParse(args[i + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int rate))
+                        {
+                            fps = rate;
+                            i++;
+                        }
+
+                        break;
                 }
             }
 
@@ -64,7 +104,11 @@ namespace PoliceChaser.Desktop
             {
                 using var game = new ChaseGame();
 
-                if (screen != null)
+                if (screen != null && video != null)
+                {
+                    game.EnableSelfTestVideo(screen, videoWarmup, videoFrames, fps, video);
+                }
+                else if (screen != null)
                 {
                     game.EnableSelfTest(screen, frames, shot ?? "selftest.png");
                 }
