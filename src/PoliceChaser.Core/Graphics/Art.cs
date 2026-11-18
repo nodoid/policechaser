@@ -113,6 +113,62 @@ namespace PoliceChaser.Graphics
             }
         }
 
+        private void SetDevice(int x, int y, Color color)
+        {
+            if (x < 0 || y < 0 || x >= Width || y >= Height)
+            {
+                return;
+            }
+
+            Pixels[y * Width + x] = color;
+        }
+
+        /// <summary>Rounded rectangle rasterised at canvas resolution, so curved panels
+        /// stay smooth once the canvas is downsampled into a vehicle texture.</summary>
+        public void FillRoundedRect(int x, int y, int w, int h, int radius, Color color)
+        {
+            FillRoundedRectGradient(x, y, w, h, radius, color, color);
+        }
+
+        /// <summary>Rounded rectangle filled with a vertical gradient.</summary>
+        public void FillRoundedRectGradient(int x, int y, int w, int h, int radius, Color top, Color bottom)
+        {
+            if (w <= 0 || h <= 0)
+            {
+                return;
+            }
+
+            int scale = _scale;
+            int px = x * scale;
+            int py = y * scale;
+            int pw = w * scale;
+            int ph = h * scale;
+            int r = Math.Max(0, Math.Min(radius * scale, Math.Min(pw, ph) / 2));
+
+            for (int row = 0; row < ph; row++)
+            {
+                float edge = 0f;
+                if (row < r)
+                {
+                    edge = r - row;
+                }
+                else if (row > ph - 1 - r)
+                {
+                    edge = row - (ph - 1 - r);
+                }
+
+                int inset = edge > 0f
+                    ? (int)MathF.Round(r - MathF.Sqrt(MathF.Max(0f, r * r - edge * edge)))
+                    : 0;
+                Color color = Color.Lerp(top, bottom, ph == 1 ? 0f : row / (float)(ph - 1));
+
+                for (int xx = px + inset; xx < px + pw - inset; xx++)
+                {
+                    SetDevice(xx, py + row, color);
+                }
+            }
+        }
+
         public void Rect(int x, int y, int w, int h, Color color)
         {
             int t = _scale;
@@ -188,7 +244,7 @@ namespace PoliceChaser.Graphics
                     float ny = y / (float)rry;
                     if (nx * nx + ny * ny <= 1f)
                     {
-                        SetPixel(ccx + x, ccy + y, color);
+                        SetDevice(ccx + x, ccy + y, color);
                     }
                 }
             }
@@ -267,6 +323,72 @@ namespace PoliceChaser.Graphics
         {
             var texture = new Texture2D(device, Width, Height);
             texture.SetData(Pixels);
+            return texture;
+        }
+
+        /// <summary>
+        /// Bakes this supersampled canvas down to a smaller texture with a box filter.
+        /// Colours are averaged premultiplied so transparent corners do not darken
+        /// the anti-aliased edge.
+        /// </summary>
+        public Texture2D ToTexture(GraphicsDevice device, int width, int height)
+        {
+            if (width <= 0 || height <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(width));
+            }
+
+            if (width == Width && height == Height)
+            {
+                return ToTexture(device);
+            }
+
+            if (Width % width != 0 || Height % height != 0)
+            {
+                throw new ArgumentException("target size must be an integer divisor of the canvas");
+            }
+
+            int blockX = Width / width;
+            int blockY = Height / height;
+            float samples = blockX * blockY;
+            var pixels = new Color[width * height];
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    float r = 0f, g = 0f, b = 0f, alpha = 0f;
+                    for (int yy = 0; yy < blockY; yy++)
+                    {
+                        int row = (y * blockY + yy) * Width + x * blockX;
+                        for (int xx = 0; xx < blockX; xx++)
+                        {
+                            Color pixel = Pixels[row + xx];
+                            float coverage = pixel.A / 255f;
+                            r += pixel.R * coverage;
+                            g += pixel.G * coverage;
+                            b += pixel.B * coverage;
+                            alpha += coverage;
+                        }
+                    }
+
+                    if (alpha <= 0.0001f)
+                    {
+                        pixels[y * width + x] = Color.Transparent;
+                        continue;
+                    }
+
+                    float inverse = 1f / alpha;
+                    pixels[y * width + x] = new Color(
+                        (int)(r * inverse),
+                        (int)(g * inverse),
+                        (int)(b * inverse),
+                        (int)(alpha * 255f / samples));
+                }
+            }
+
+            var texture = new Texture2D(device, width, height);
+            texture.SetData(pixels);
             return texture;
         }
     }
@@ -574,126 +696,161 @@ namespace PoliceChaser.Graphics
             return texture;
         }
 
-        private Texture2D BuildPlayerCar(int lean)
+        /// <summary>
+        /// Bakes a vehicle at twice the canvas resolution and averages it back down, so
+        /// rounded panels and tyres are anti-aliased instead of stair-stepped.
+        /// </summary>
+        private Texture2D BakeSmooth(int width, int height, Action<Canvas> draw)
         {
-            var canvas = new Canvas(64, 44);
-            int bias = lean * 2;
-
-            // Wheels.
-            canvas.FillRect(4, 28, 12, 16, Tyre);
-            canvas.FillRect(48, 28, 12, 16, Tyre);
-            canvas.FillRect(6, 30, 8, 4, new Color(70, 70, 82));
-            canvas.FillRect(50, 30, 8, 4, new Color(70, 70, 82));
-
-            // Body.
-            canvas.FillTrapezoid(12, 34, 12 + bias, 52 + bias, 4, 60, WhiteColor);
-            canvas.FillTrapezoid(30, 40, 4, 60, 8, 56, new Color(224, 226, 236));
-
-            // Doors / stripe.
-            canvas.FillRect(6 + bias, 22, 52, 6, Blue);
-            canvas.FillRect(8 + bias, 27, 48, 2, new Color(24, 52, 140));
-
-            // Rear window.
-            canvas.FillTrapezoid(2, 13, 20 + bias, 44 + bias, 14 + bias, 50 + bias, Glass);
-            canvas.FillTrapezoid(3, 7, 24 + bias, 40 + bias, 22 + bias, 42 + bias, new Color(70, 96, 140));
-
-            // Light bar.
-            canvas.FillRect(20 + bias, 0, 24, 5, Dark);
-            canvas.FillRect(21 + bias, 1, 11, 3, Red);
-            canvas.FillRect(33 + bias, 1, 10, 3, new Color(70, 140, 255));
-            canvas.FillRect(21 + bias, 1, 11, 1, new Color(255, 160, 160));
-            canvas.FillRect(33 + bias, 1, 10, 1, new Color(170, 210, 255));
-
-            // Boot lid and chequered band.
-            canvas.FillRect(10 + bias, 31, 44, 4, new Color(250, 250, 255));
-            for (int i = 0; i < 6; i++)
+            int scale = RenderSettings.Scale;
+            Canvas.DefaultScale = scale * 2;
+            Canvas canvas;
+            try
             {
-                canvas.FillRect(11 + bias + i * 7, 31, 4, 2, Blue);
-                canvas.FillRect(14 + bias + i * 7, 33, 4, 2, Blue);
+                canvas = new Canvas(width, height);
+                draw(canvas);
+            }
+            finally
+            {
+                Canvas.DefaultScale = scale;
             }
 
-            // Tail lights.
-            canvas.FillRect(5, 18, 10, 5, new Color(220, 40, 40));
-            canvas.FillRect(49, 18, 10, 5, new Color(220, 40, 40));
-            canvas.FillRect(6, 19, 8, 2, new Color(255, 140, 120));
+            return canvas.ToTexture(_device, width * scale, height * scale);
+        }
 
-            // Bumper.
-            canvas.FillRect(3, 38, 58, 4, new Color(52, 54, 66));
-            canvas.FillRect(26, 37, 12, 3, new Color(200, 200, 208));
+        private static Color Lighten(Color color, float amount)
+        {
+            return new Color(
+                (int)MathF.Min(255f, color.R + (255 - color.R) * amount),
+                (int)MathF.Min(255f, color.G + (255 - color.G) * amount),
+                (int)MathF.Min(255f, color.B + (255 - color.B) * amount));
+        }
 
-            return canvas.ToTexture(_device);
+        private static Color Darken(Color color, float amount)
+        {
+            return new Color(
+                (int)(color.R * (1f - amount)),
+                (int)(color.G * (1f - amount)),
+                (int)(color.B * (1f - amount)));
+        }
+
+        private Texture2D BuildPlayerCar(int lean)
+        {
+            return BakeSmooth(64, 44, canvas =>
+            {
+                int bias = lean * 2;
+
+                // Tyres, with a subtle hub highlight.
+                canvas.FillEllipse(11 + bias, 33, 7, 10, Tyre);
+                canvas.FillEllipse(53 + bias, 33, 7, 10, Tyre);
+                canvas.FillEllipse(11 + bias, 34, 3, 5, new Color(56, 60, 74));
+                canvas.FillEllipse(53 + bias, 34, 3, 5, new Color(56, 60, 74));
+
+                // Cabin and rear window.
+                canvas.FillRoundedRect(17 + bias, 3, 30, 21, 7, Dark);
+                canvas.FillRoundedRectGradient(20 + bias, 6, 24, 15, 5,
+                    new Color(96, 124, 170), Glass);
+                canvas.FillRoundedRect(22 + bias, 7, 20, 4, 2, new Color(176, 204, 238, 120));
+
+                // Body shell with a soft top-to-bottom sheen.
+                canvas.FillRoundedRectGradient(3, 18, 58, 22, 6,
+                    WhiteColor, new Color(202, 206, 222));
+                canvas.FillRoundedRect(5, 19, 54, 3, 1, new Color(255, 255, 255, 130));
+
+                // Tail lights.
+                canvas.FillRoundedRect(5, 21, 11, 7, 2, Red);
+                canvas.FillRoundedRect(48, 21, 11, 7, 2, Red);
+                canvas.FillRoundedRect(6, 22, 9, 2, 1, new Color(255, 154, 150, 180));
+                canvas.FillRoundedRect(49, 22, 9, 2, 1, new Color(255, 154, 150, 180));
+
+                // Livery.
+                canvas.FillRoundedRect(4, 28, 56, 6, 2, Blue);
+                canvas.FillRoundedRect(4, 33, 56, 2, 1, new Color(24, 52, 140));
+                for (int i = 0; i < 7; i++)
+                {
+                    if (i % 2 == 0)
+                    {
+                        canvas.FillRect(9 + i * 7, 35, 4, 2, Blue);
+                    }
+                }
+
+                // Bumper and plate.
+                canvas.FillRoundedRect(4, 37, 56, 5, 2, new Color(52, 54, 66));
+                canvas.FillRoundedRect(26, 38, 12, 3, 1, new Color(200, 200, 208));
+
+                // Light bar.
+                canvas.FillRoundedRect(19 + bias, 0, 26, 5, 2, Dark);
+                canvas.FillRoundedRect(20 + bias, 1, 11, 3, 1, Red);
+                canvas.FillRoundedRect(33 + bias, 1, 11, 3, 1, new Color(70, 140, 255));
+                canvas.FillRoundedRect(20 + bias, 1, 11, 1, 1, new Color(255, 160, 160));
+                canvas.FillRoundedRect(33 + bias, 1, 11, 1, 1, new Color(170, 210, 255));
+            });
         }
 
         private Texture2D BuildShadow()
         {
-            var canvas = new Canvas(64, 14);
-            canvas.FillEllipse(32, 7, 30, 6, new Color(0, 0, 0, 90));
-            canvas.FillEllipse(32, 7, 22, 4, new Color(0, 0, 0, 120));
-            return canvas.ToTexture(_device);
+            return BakeSmooth(64, 14, canvas =>
+            {
+                canvas.FillEllipse(32, 7, 30, 6, new Color(0, 0, 0, 90));
+                canvas.FillEllipse(32, 7, 22, 4, new Color(0, 0, 0, 140));
+            });
         }
 
         private Texture2D BuildCar(int width, int height, Color body, bool sports, bool tall, bool oncoming = false)
         {
-            var canvas = new Canvas(width, height);
-            int w = width;
-            int h = height;
-
-            int wheelTop = tall ? h - 16 : h - 14;
-            int bodyTop = tall ? 12 : 10;
-            int bodyBottom = h - 6;
-
-            // Wheels.
-            canvas.FillRect(3, wheelTop, 10, h - wheelTop, Tyre);
-            canvas.FillRect(w - 13, wheelTop, 10, h - wheelTop, Tyre);
-
-            // Body shell.
-            canvas.FillTrapezoid(bodyTop, bodyBottom, 7, w - 7, 2, w - 2, body);
-            canvas.FillTrapezoid(bodyBottom - 4, bodyBottom, 2, w - 2, 6, w - 6, new Color(
-                Math.Max(0, body.R - 40),
-                Math.Max(0, body.G - 40),
-                Math.Max(0, body.B - 40)));
-
-            // Roof / window.
-            int roofInset = sports ? 10 : 8;
-            canvas.FillTrapezoid(2, bodyTop + 1, roofInset + 6, w - roofInset - 6, roofInset, w - roofInset,
-                new Color(
-                    Math.Max(0, body.R - 20),
-                    Math.Max(0, body.G - 20),
-                    Math.Max(0, body.B - 20)));
-            canvas.FillTrapezoid(4, bodyTop - 1, roofInset + 8, w - roofInset - 8, roofInset + 3, w - roofInset - 3,
-                oncoming ? new Color(60, 78, 110) : Glass);
-
-            if (sports)
+            return BakeSmooth(width, height, canvas =>
             {
-                // Rear wing.
-                canvas.FillRect(4, bodyTop + 2, w - 8, 3, Dark);
-                canvas.FillRect(6, bodyTop + 4, 3, 5, Dark);
-                canvas.FillRect(w - 9, bodyTop + 4, 3, 5, Dark);
-            }
+                int bodyTop = tall ? 12 : 10;
+                int bodyBottom = height - 5;
 
-            if (oncoming)
-            {
-                // Headlights.
-                canvas.FillRect(5, bodyTop + 10, 10, 6, new Color(255, 250, 210));
-                canvas.FillRect(w - 15, bodyTop + 10, 10, 6, new Color(255, 250, 210));
-                canvas.FillRect(7, bodyTop + 11, 6, 3, new Color(255, 255, 255));
-                canvas.FillRect(w - 13, bodyTop + 11, 6, 3, new Color(255, 255, 255));
-                // Grille.
-                canvas.FillRect(w / 2 - 8, bodyTop + 12, 16, 5, new Color(40, 42, 52));
-            }
-            else
-            {
-                // Tail lights.
-                canvas.FillRect(4, bodyTop + 10, 9, 6, new Color(220, 44, 40));
-                canvas.FillRect(w - 13, bodyTop + 10, 9, 6, new Color(220, 44, 40));
-                canvas.FillRect(5, bodyTop + 11, 7, 2, new Color(255, 150, 130));
-                canvas.FillRect(w - 12, bodyTop + 11, 7, 2, new Color(255, 150, 130));
-            }
+                // Wheels first; the body shell tucks over their tops.
+                canvas.FillEllipse(7, height - 9, 5, 8, Tyre);
+                canvas.FillEllipse(width - 7, height - 9, 5, 8, Tyre);
 
-            // Bumper.
-            canvas.FillRect(2, h - 6, w - 4, 4, new Color(48, 50, 62));
+                Color shellTop = Lighten(body, 0.14f);
+                Color shellBottom = Darken(body, 0.24f);
 
-            return canvas.ToTexture(_device);
+                // Cabin and window.
+                canvas.FillRoundedRect(7, 2, width - 14, bodyTop + 5, 5, Darken(body, 0.34f));
+                canvas.FillRoundedRectGradient(9, 4, width - 18, bodyTop, 4,
+                    oncoming ? new Color(74, 96, 132) : new Color(58, 78, 112),
+                    oncoming ? new Color(44, 58, 84) : new Color(34, 48, 72));
+                canvas.FillRoundedRect(11, 5, width - 22, 2, 1, new Color(190, 214, 245, 90));
+
+                // Body shell.
+                canvas.FillRoundedRectGradient(2, bodyTop, width - 4, bodyBottom - bodyTop, 5,
+                    shellTop, shellBottom);
+                canvas.FillRoundedRect(3, bodyTop + 1, width - 6, 2, 1, new Color(255, 255, 255, 75));
+
+                if (sports)
+                {
+                    // Rear wing.
+                    canvas.FillRoundedRect(5, bodyTop + 1, width - 10, 3, 2, new Color(20, 22, 34));
+                    canvas.FillRect(8, bodyTop + 4, 3, 4, new Color(20, 22, 34));
+                    canvas.FillRect(width - 11, bodyTop + 4, 3, 4, new Color(20, 22, 34));
+                }
+
+                if (oncoming)
+                {
+                    // Headlights and grille.
+                    canvas.FillRoundedRect(4, bodyTop + 8, 10, 6, 2, new Color(255, 250, 214));
+                    canvas.FillRoundedRect(width - 14, bodyTop + 8, 10, 6, 2, new Color(255, 250, 214));
+                    canvas.FillRoundedRect(6, bodyTop + 9, 6, 3, 1, Color.White);
+                    canvas.FillRoundedRect(width - 12, bodyTop + 9, 6, 3, 1, Color.White);
+                    canvas.FillRoundedRect(width / 2 - 8, bodyTop + 11, 16, 5, 2, new Color(40, 42, 52));
+                }
+                else
+                {
+                    // Tail lights.
+                    canvas.FillRoundedRect(4, bodyTop + 9, 9, 6, 2, new Color(220, 44, 40));
+                    canvas.FillRoundedRect(width - 13, bodyTop + 9, 9, 6, 2, new Color(220, 44, 40));
+                    canvas.FillRoundedRect(5, bodyTop + 10, 7, 2, 1, new Color(255, 150, 130, 180));
+                    canvas.FillRoundedRect(width - 12, bodyTop + 10, 7, 2, 1, new Color(255, 150, 130, 180));
+                }
+
+                // Bumper.
+                canvas.FillRoundedRect(2, height - 7, width - 4, 5, 2, new Color(48, 50, 62));
+            });
         }
 
         /// <summary>HQ dispatcher at the other end of the radio, in the style of the 8-bit original.</summary>

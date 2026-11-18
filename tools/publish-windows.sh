@@ -16,19 +16,18 @@ if [[ "$SELF_CONTAINED" == "1" ]]; then
   dotnet publish "$ROOT/src/PoliceChaser.Desktop/PoliceChaser.Desktop.csproj" \
     -c Release -r "$RID" --self-contained true -o "$OUT" --nologo \
     -p:PublishTrimmed=false -p:EnableCompressionInSingleFile=true \
-    -p:UseMonoRuntime=false
+    -p:UseMonoRuntime=false -p:OutputType=WinExe
 else
   dotnet publish "$ROOT/src/PoliceChaser.Desktop/PoliceChaser.Desktop.csproj" \
     -c Release -r "$RID" --self-contained false -o "$OUT" --nologo \
-    -p:UseMonoRuntime=false
+    -p:UseMonoRuntime=false -p:OutputType=WinExe
 fi
 
 mkdir -p "$OUT/Assets"
 cp "$ROOT/windows/Package.appxmanifest" "$OUT/Package.appxmanifest"
-for name in StoreLogo Square150x150Logo Square44x44Logo Square44x44Logo.targetsize-48; do
-  if [[ -f "$ROOT/assets/$name.png" ]]; then
-    cp "$ROOT/assets/$name.png" "$OUT/Assets/$name.png"
-  fi
+for name in "$ROOT"/assets/StoreLogo*.png "$ROOT"/assets/Square[0-9]*.png \
+            "$ROOT"/assets/SplashScreen*.png; do
+  [[ -f "$name" ]] && cp "$name" "$OUT/Assets/"
 done
 
 echo "staged: $OUT"

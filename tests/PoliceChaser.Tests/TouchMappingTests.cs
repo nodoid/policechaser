@@ -55,6 +55,29 @@ namespace PoliceChaser.Tests
             Assert.InRange(mapped.Y, 85f, 87f);
         }
 
+        [Fact]
+        public void Full_bleed_canvas_maps_pads_on_a_wide_phone()
+        {
+            // A 2400x1080 phone widens the canvas to 2144x960, centring the 1280-wide picture
+            // with 432px of world either side.
+            const float backBufferWidth = 2400f;
+            const float backBufferHeight = 1080f;
+            const float canvasWidth = 2144f;
+            const float canvasHeight = 960f;
+            const float originX = (canvasWidth - 1280f) / 2f;
+
+            // The TURBO pad's centre (282, 176) laid out in the widened canvas.
+            float deviceX = (originX + 282f * 4f) / canvasWidth * backBufferWidth;
+            float deviceY = 176f * 4f / canvasHeight * backBufferHeight;
+
+            Vector2 mapped = TouchMapping.FullBleedToLogical(
+                new Vector2(deviceX, deviceY), backBufferWidth, backBufferHeight,
+                canvasWidth, canvasHeight, originX);
+
+            Assert.InRange(mapped.X, 281.5f, 282.5f);
+            Assert.InRange(mapped.Y, 175.5f, 176.5f);
+        }
+
         private static Vector2 Map(Vector2 reported)
         {
             Vector2 screen = TouchMapping.UndoTouchScale(

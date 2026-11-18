@@ -3,12 +3,13 @@
   <PropertyGroup>
     <TargetFramework>net10.0-android36.0</TargetFramework>
     <SupportedOSPlatformVersion>32.0</SupportedOSPlatformVersion>
+    <TargetSdkVersion>36</TargetSdkVersion>
     <OutputType>Exe</OutputType>
     <RootNamespace>PoliceChaser.Android</RootNamespace>
     <AssemblyName>PoliceChaser.Android</AssemblyName>
     <ApplicationId>uk.co.allthejohnsons.policechaser</ApplicationId>
-    <ApplicationVersion>1</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>2</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
     <RunAOTCompilation>false</RunAOTCompilation>

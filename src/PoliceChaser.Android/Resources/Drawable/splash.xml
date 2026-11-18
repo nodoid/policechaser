@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
   <item>
-    <color android:color="#090D1E" />
+    <color android:color="@color/ic_launcher_background" />
   </item>
   <item android:gravity="center">
-    <bitmap android:src="@mipmap/icon" android:gravity="center" />
+    <bitmap android:src="@drawable/splash_logo" android:gravity="center" />
   </item>
 </layer-list>

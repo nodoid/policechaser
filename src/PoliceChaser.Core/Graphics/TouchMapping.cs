@@ -27,6 +27,27 @@ namespace PoliceChaser.Graphics
                 touch.Y * windowHeight / displayHeight);
         }
 
+        /// <summary>
+        /// Maps device pixels to logical layout units when the canvas fills the screen, as it does
+        /// on phones: the 320x240 picture sits centred in a wider canvas with extra world either
+        /// side, so only the margin has to be undone.
+        /// </summary>
+        public static Vector2 FullBleedToLogical(Vector2 pixels, float spaceWidth, float spaceHeight,
+            float canvasWidth, float canvasHeight, float originX)
+        {
+            if (spaceWidth <= 0f || spaceHeight <= 0f || canvasWidth <= 0f || canvasHeight <= 0f)
+            {
+                return Vector2.Zero;
+            }
+
+            float canvasX = pixels.X * canvasWidth / spaceWidth - originX;
+            float canvasY = pixels.Y * canvasHeight / spaceHeight;
+
+            return new Vector2(
+                canvasX / RenderSettings.Scale,
+                canvasY / RenderSettings.Scale);
+        }
+
         /// <summary>Maps picture pixels (with letterbox bars) to logical 320x240 coordinates.</summary>
         public static Vector2 ToLogical(Vector2 pixels, float spaceWidth, float spaceHeight)
         {

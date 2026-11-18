@@ -24,7 +24,6 @@ namespace PoliceChaser.Graphics
     {
         private const int S = RenderSettings.Scale;
 
-        public const int ScreenWidth = RenderSettings.Width;
         public const int ScreenHeight = RenderSettings.Height;
         public const int ViewTop = 18 * S;
         public const int ViewBottom = 208 * S;
@@ -34,7 +33,10 @@ namespace PoliceChaser.Graphics
         private const float CameraDepth = 0.84f;
         private const float RoadWidth = 2000f;
         private const float CameraHeight = 1000f;
-        private const float HalfScreen = ScreenWidth / 2f;
+
+        // The projection keeps the field of view of the authored 4:3 picture, so a wider canvas
+        // reveals more of the world instead of stretching what was already on screen.
+        private const float FocalX = RenderSettings.Width / 2f;
         private const float HalfHeight = ScreenHeight / 2f;
 
         private struct Projected
@@ -52,6 +54,14 @@ namespace PoliceChaser.Graphics
 
         /// <summary>Horizontal skyline drift, accumulated from curves by the game (logical units).</summary>
         public float SkylineOffset { get; set; }
+
+        /// <summary>Width of the canvas being drawn into; phones widen it to fill the screen.</summary>
+        public int ScreenWidth { get; set; } = RenderSettings.Width;
+
+        /// <summary>Left edge of the centred 4:3 picture inside that canvas, in pixels.</summary>
+        public int OriginX { get; set; }
+
+        private float CentreX => ScreenWidth / 2f;
 
         public void Render(
             SpriteBatch batch,
@@ -133,15 +143,15 @@ namespace PoliceChaser.Graphics
             {
                 float t = y / (float)Horizon;
                 Color color = Color.Lerp(palette.SkyTop, palette.SkyBottom, t * t);
-                batch.Draw(pixel, new Rectangle(0, y, ScreenWidth, 1), color);
+                Fill(batch, pixel, 0, y, ScreenWidth, 1, color);
             }
 
             float drift = SkylineOffset * S;
 
             Texture2D sun = art.Sun(theme);
-            int sunX = (int)(160 * S - drift * 0.18f) - sun.Width / 2;
+            int sunX = (int)(CentreX - drift * 0.18f) - sun.Width / 2;
             sunX = ((sunX % (900 * S)) + 900 * S) % (900 * S) - 120 * S;
-            batch.Draw(sun, new Rectangle(sunX, 26 * S, sun.Width, sun.Height), Color.White);
+            Blit(batch, sun, sunX, 26 * S, sun.Width, sun.Height, Color.White);
 
             DrawSkylineLayer(batch, art.Skyline(theme, false), Horizon + 4 * S, drift * 0.22f, 1f);
             DrawSkylineLayer(batch, art.Skyline(theme, true), Horizon + 6 * S, drift * 0.5f, 1f);
@@ -152,13 +162,13 @@ namespace PoliceChaser.Graphics
                 int alpha = (int)(70 * (1f - MathF.Abs(t - 0.5f) * 2f));
                 if (alpha > 0)
                 {
-                    batch.Draw(pixel, new Rectangle(0, y, ScreenWidth, 1),
+                    Fill(batch, pixel, 0, y, ScreenWidth, 1,
                         new Color(palette.Fog.R, palette.Fog.G, palette.Fog.B, alpha));
                 }
             }
         }
 
-        private static void DrawSkylineLayer(SpriteBatch batch, Texture2D texture, int bottomY, float offset, float alpha)
+        private void DrawSkylineLayer(SpriteBatch batch, Texture2D texture, int bottomY, float offset, float alpha)
         {
             int width = texture.Width;
             int start = -(int)(((offset % width) + width) % width);
@@ -166,8 +176,20 @@ namespace PoliceChaser.Graphics
 
             for (int x = start; x < ScreenWidth; x += width)
             {
-                batch.Draw(texture, new Rectangle(x, y, width, texture.Height), Color.White * alpha);
+                Blit(batch, texture, x, y, width, texture.Height, Color.White * alpha);
             }
+        }
+
+        /// <summary>Fills a rectangle given in canvas pixels, accounting for the picture's margin.</summary>
+        private void Fill(SpriteBatch batch, Texture2D pixel, float x, float y, float w, float h, Color color)
+        {
+            batch.Draw(pixel, new Rectangle((int)x - OriginX, (int)y, (int)w, (int)h), color);
+        }
+
+        /// <summary>Draws a texture given in canvas pixels, accounting for the picture's margin.</summary>
+        private void Blit(SpriteBatch batch, Texture2D texture, int x, int y, int w, int h, Color tint)
+        {
+            batch.Draw(texture, new Rectangle(x - OriginX, y, w, h), tint);
         }
 
         private void DrawBand(
@@ -219,12 +241,12 @@ namespace PoliceChaser.Graphics
                     continue;
                 }
 
-                batch.Draw(pixel, new Rectangle(0, y, ScreenWidth, 1), grass);
-                batch.Draw(pixel, new Rectangle(left, y, width, 1), road);
+                Fill(batch, pixel, 0, y, ScreenWidth, 1, grass);
+                Fill(batch, pixel, left, y, width, 1, road);
 
                 int rumbleWidth = Math.Max(1, (int)(half * 0.11f));
-                batch.Draw(pixel, new Rectangle(left, y, rumbleWidth, 1), rumble);
-                batch.Draw(pixel, new Rectangle(right - rumbleWidth, y, rumbleWidth, 1), rumble);
+                Fill(batch, pixel, left, y, rumbleWidth, 1, rumble);
+                Fill(batch, pixel, right - rumbleWidth, y, rumbleWidth, 1, rumble);
 
                 if ((segmentIndex % 6) < 3)
                 {
@@ -237,8 +259,8 @@ namespace PoliceChaser.Graphics
 
                     int laneLeft = (int)(cx - half * 0.34f);
                     int laneRight = (int)(cx + half * 0.34f);
-                    batch.Draw(pixel, new Rectangle(laneLeft, y, laneWidth, 1), lane);
-                    batch.Draw(pixel, new Rectangle(laneRight, y, laneWidth, 1), lane);
+                    Fill(batch, pixel, laneLeft, y, laneWidth, 1, lane);
+                    Fill(batch, pixel, laneRight, y, laneWidth, 1, lane);
                 }
             }
         }
@@ -277,9 +299,9 @@ namespace PoliceChaser.Graphics
                 }
 
                 float scale = CameraDepth / dz;
-                float sx = HalfScreen + scale * ((sprite.X * RoadWidth) - camX) * HalfScreen + shakeX;
+                float sx = CentreX + scale * ((sprite.X * RoadWidth) - camX) * FocalX + shakeX;
                 float groundY = Horizon - scale * ((road.HeightAt(sprite.Z) - cameraY) * HalfHeight) + shakeY;
-                float w = sprite.WorldWidth * scale * HalfScreen;
+                float w = sprite.WorldWidth * scale * FocalX;
                 if (w < 1f)
                 {
                     continue;
@@ -293,7 +315,7 @@ namespace PoliceChaser.Graphics
                 }
 
                 float h = w * sprite.Texture.Height / sprite.Texture.Width;
-                int drawX = (int)(sx - w / 2f);
+                int drawX = (int)(sx - w / 2f) - OriginX;
                 int drawY = (int)(groundY - h);
 
                 int segIdx = road.IndexAt(sprite.Z);
@@ -319,9 +341,9 @@ namespace PoliceChaser.Graphics
             float scale = CameraDepth / dz;
             return new Projected
             {
-                X = HalfScreen + scale * (offsetX - camX) * HalfScreen + shakeX,
+                X = CentreX + scale * (offsetX - camX) * FocalX + shakeX,
                 Y = Horizon - scale * (worldY - cameraY) * HalfHeight + shakeY,
-                W = scale * RoadWidth * HalfScreen
+                W = scale * RoadWidth * FocalX
             };
         }
 
@@ -331,7 +353,7 @@ namespace PoliceChaser.Graphics
             float dz = MathF.Max(0.01f, z - cameraZ);
             float scale = CameraDepth / dz;
             return new Vector2(
-                HalfScreen + scale * ((x * RoadWidth) - playerX * RoadWidth) * HalfScreen,
+                RenderSettings.Width / 2f + scale * ((x * RoadWidth) - playerX * RoadWidth) * FocalX,
                 Horizon - scale * (groundY - cameraY) * HalfHeight);
         }
     }

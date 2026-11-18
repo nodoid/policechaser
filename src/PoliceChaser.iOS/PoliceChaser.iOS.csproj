@@ -7,8 +7,8 @@
     <RootNamespace>PoliceChaser.iOS</RootNamespace>
     <AssemblyName>PoliceChaser</AssemblyName>
     <ApplicationTitle>Police Chaser</ApplicationTitle>
-    <ApplicationVersion>1</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>2</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>
     <CodesignKey>Apple Development</CodesignKey>
     <CodesignProvision>devel-police</CodesignProvision>
     <MtouchLink>SdkOnly</MtouchLink>

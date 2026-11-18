@@ -49,6 +49,10 @@ namespace PoliceChaser
         private readonly GraphicsDeviceManager _graphics;
         private SpriteBatch _spriteBatch;
         private RenderTarget2D _target;
+        private int _canvasWidth = RenderSettings.Width;
+        private int _canvasHeight = RenderSettings.Height;
+        private int _originX;
+        private bool _wide;
         private Texture2D _white;
         private GameFont _font;
         private Art _art;
@@ -104,6 +108,7 @@ namespace PoliceChaser
         private int _selfTestFrames = 90;
         private int _selfTestFrame;
         private bool _selfTestTapped;
+        private bool _selfTestCaptured;
 
         private struct InputFrame
         {
@@ -142,6 +147,78 @@ namespace PoliceChaser
             Window.Title = "Police Chaser";
         }
 
+        /// <summary>
+        /// Gives the Android host the real display size. MonoGame otherwise keeps the 4:3
+        /// preferred backbuffer, sizes the surface to it and leaves the rest of a wide phone
+        /// screen black. Must be called before Run().
+        /// </summary>
+        public void SetBackBuffer(int width, int height)
+        {
+            if (width <= 0 || height <= 0)
+            {
+                return;
+            }
+
+            _graphics.PreferredBackBufferWidth = Math.Max(width, height);
+            _graphics.PreferredBackBufferHeight = Math.Min(width, height);
+        }
+
+        /// <summary>
+        /// Makes sure the render target matches the canvas for the current display, recreating
+        /// it only when the display aspect has changed (rotation, split screen, foldable).
+        /// </summary>
+        private void EnsureCanvas()
+        {
+            UpdateCanvas();
+
+            if (_target == null || _target.Width != _canvasWidth || _target.Height != _canvasHeight)
+            {
+                _target?.Dispose();
+                _target = new RenderTarget2D(GraphicsDevice, _canvasWidth, _canvasHeight, false,
+                    SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
+            }
+        }
+
+        /// <summary>
+        /// Chooses the canvas the game is drawn into. On a phone it is widened to the display's
+        /// aspect with the authored 320x240 picture centred inside it, so the world reaches the
+        /// edges of the screen instead of sitting between letterbox bars; desktop windows and
+        /// portrait displays keep the plain 4:3 canvas.
+        /// </summary>
+        private void UpdateCanvas()
+        {
+            int width = GraphicsDevice.PresentationParameters.BackBufferWidth;
+            int height = GraphicsDevice.PresentationParameters.BackBufferHeight;
+
+            if (!MobilePlatform || width <= 0 || height <= 0 || width <= height)
+            {
+                SetCanvas(RenderSettings.Width, RenderSettings.Height);
+                return;
+            }
+
+            int canvas = (int)MathF.Round(RenderSettings.Height * width / (float)height);
+            canvas = Math.Clamp(canvas, RenderSettings.Width, RenderSettings.Width * 2);
+
+            // A multiple of 16 keeps the centred picture on whole logical pixels so layout and
+            // hit testing never fall between them.
+            canvas = Math.Min(RenderSettings.Width * 2, (canvas + 15) & ~15);
+            SetCanvas(canvas, RenderSettings.Height);
+        }
+
+        private void SetCanvas(int width, int height)
+        {
+            _canvasWidth = width;
+            _canvasHeight = height;
+            _originX = (width - RenderSettings.Width) / 2;
+            _wide = width > RenderSettings.Width;
+        }
+
+        /// <summary>Left edge of the 320-wide layout inside the canvas, in logical units.</summary>
+        private int OriginLogical => _originX / S;
+
+        /// <summary>The whole canvas in logical units, including the mobile side margins.</summary>
+        private Rectangle CanvasLogical => new Rectangle(-OriginLogical, 0, _canvasWidth / S, _canvasHeight / S);
+
         protected override void Initialize()
         {
             Window.Title = "Police Chaser";
@@ -151,8 +228,7 @@ namespace PoliceChaser
         protected override void LoadContent()
         {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
-            _target = new RenderTarget2D(GraphicsDevice, RenderSettings.Width, RenderSettings.Height, false,
-                SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
+            EnsureCanvas();
 
             _white = new Texture2D(GraphicsDevice, 1, 1);
             _white.SetData(new[] { Color.White });
@@ -708,7 +784,7 @@ namespace PoliceChaser
 
         private void UpdateBriefing()
         {
-            if (_input.Confirm || TapOn(new Rectangle(0, 0, VirtualWidth, VirtualHeight)))
+            if (_input.Confirm || TapOn(CanvasLogical))
             {
                 StartCampaign();
             }
@@ -1441,9 +1517,12 @@ namespace PoliceChaser
             UpdateNameEntry();
             Check("name entry: letter box selects", _nameCursor == 2);
 
+            string entered = new string(_nameLetters);
             AuditTap(NameOkButton.Center.X, NameOkButton.Center.Y);
             UpdateNameEntry();
             Check("name entry: OK submits", _screen == GameScreen.HighScores);
+            Check("name entry: typed name lands on the table",
+                _scores.Table.Entries.Exists(e => e.Name == entered));
 
             SetScreen(GameScreen.Paused);
             AuditTap(160, 120);
@@ -1454,9 +1533,13 @@ namespace PoliceChaser
                 ? "ALL " + lines.Count + " TOUCH CHECKS PASSED"
                 : failures + " OF " + lines.Count + " TOUCH CHECKS FAILED");
 
+            string auditPath = System.IO.Path.IsPathRooted(_selfTestPath)
+                ? _selfTestPath + ".audit.txt"
+                : System.IO.Path.Combine(LocalHighScoreFile.DefaultRoot, _selfTestPath + ".audit.txt");
+
             try
             {
-                File.WriteAllLines(_selfTestPath + ".audit.txt", lines);
+                File.WriteAllLines(auditPath, lines);
             }
             catch (Exception)
             {
@@ -1732,11 +1815,17 @@ namespace PoliceChaser
 
         private void DrawFrame(GameTime gameTime)
         {
+            // A rotation, split screen or foldable can change the display mid-session.
+            EnsureCanvas();
+
             GraphicsDevice.SetRenderTarget(_target);
             GraphicsDevice.Clear(Color.Black);
 
+            // The 320x240 layout is authored once; on a phone the batch is shifted so it sits
+            // centred in the wider canvas while the world reaches both screen edges.
             _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
-                DepthStencilState.None, RasterizerState.CullNone);
+                DepthStencilState.None, RasterizerState.CullNone, null,
+                Matrix.CreateTranslation(_originX, 0f, 0f));
 
             if (PortraitWindow)
             {
@@ -1799,11 +1888,14 @@ namespace PoliceChaser
             _spriteBatch.Draw(_target, destination, Color.White);
             _spriteBatch.End();
 
-            if (_selfTest)
+            // iOS has no Exit(), so the capture must be a one-shot or it would rewrite the
+            // screenshot on every frame.
+            if (_selfTest && !_selfTestCaptured)
             {
                 _selfTestFrame++;
                 if (_selfTestFrame >= _selfTestFrames)
                 {
+                    _selfTestCaptured = true;
                     CaptureSelfTest();
                 }
             }
@@ -1817,12 +1909,18 @@ namespace PoliceChaser
             int height = GraphicsDevice.PresentationParameters.BackBufferHeight;
             if (width <= 0 || height <= 0)
             {
-                return new Rectangle(0, 0, VirtualWidth, VirtualHeight);
+                return new Rectangle(0, 0, _canvasWidth, _canvasHeight);
             }
 
-            float scale = MathF.Min(width / (float)RenderSettings.Width, height / (float)RenderSettings.Height);
-            int w = (int)(RenderSettings.Width * scale);
-            int h = (int)(RenderSettings.Height * scale);
+            if (_wide)
+            {
+                // The canvas was widened to the display's aspect, so it covers the whole screen.
+                return new Rectangle(0, 0, width, height);
+            }
+
+            float scale = MathF.Min(width / (float)_canvasWidth, height / (float)_canvasHeight);
+            int w = (int)(_canvasWidth * scale);
+            int h = (int)(_canvasHeight * scale);
             return new Rectangle((width - w) / 2, (height - h) / 2, w, h);
         }
 
@@ -1834,9 +1932,16 @@ namespace PoliceChaser
             screen = TouchMapping.UndoTouchScale(screen, TouchPanel.DisplayWidth, TouchPanel.DisplayHeight,
                 window.Width, window.Height);
 
-            return TouchMapping.ToLogical(screen,
-                GraphicsDevice.PresentationParameters.BackBufferWidth,
-                GraphicsDevice.PresentationParameters.BackBufferHeight);
+            int width = GraphicsDevice.PresentationParameters.BackBufferWidth;
+            int height = GraphicsDevice.PresentationParameters.BackBufferHeight;
+
+            if (_wide)
+            {
+                return TouchMapping.FullBleedToLogical(screen, width, height,
+                    _canvasWidth, _canvasHeight, _originX);
+            }
+
+            return TouchMapping.ToLogical(screen, width, height);
         }
 
         // ------------------------------------------------------------------ primitives
@@ -1844,6 +1949,28 @@ namespace PoliceChaser
         private void Rect(int x, int y, int w, int h, Color color)
         {
             _spriteBatch.Draw(_white, new Rectangle(x * S, y * S, w * S, h * S), color);
+        }
+
+        /// <summary>Draws in canvas pixels, ignoring the centred picture's side margins.</summary>
+        private void CanvasRect(int x, int y, int w, int h, Color color)
+        {
+            _spriteBatch.Draw(_white, new Rectangle(x - _originX, y, w, h), color);
+        }
+
+        /// <summary>A band (logical y and height) that runs all the way to both screen edges.</summary>
+        private void FullRect(int y, int h, Color color)
+        {
+            CanvasRect(0, y * S, _canvasWidth, h * S, color);
+        }
+
+        /// <summary>Tiles an image across the canvas so menu artwork reaches the screen edges.</summary>
+        private void TileImage(Texture2D texture, int y, int w, int h, Color tint)
+        {
+            int tile = w * S;
+            for (int x = -_originX; x < _canvasWidth - _originX; x += tile)
+            {
+                _spriteBatch.Draw(texture, new Rectangle(x, y * S, tile, h * S), tint);
+            }
         }
 
         /// <summary>Draws a baked texture using logical (320x240) coordinates.</summary>
@@ -1935,7 +2062,7 @@ namespace PoliceChaser
             for (int y = 0; y < VirtualHeight; y++)
             {
                 float t = y / (float)VirtualHeight;
-                Rect(0, y, VirtualWidth, 1, Color.Lerp(palette.SkyTop, new Color(8, 8, 16), t * 0.75f));
+                FullRect(y, 1, Color.Lerp(palette.SkyTop, new Color(8, 8, 16), t * 0.75f));
             }
         }
 
@@ -1944,8 +2071,9 @@ namespace PoliceChaser
             int phase = (int)(_time * 8f) % 4;
             Color left = phase < 2 ? new Color(220, 40, 48) : new Color(60, 40, 48);
             Color right = phase < 2 ? new Color(40, 60, 120) : new Color(60, 120, 230);
-            Rect(0, y, VirtualWidth / 2, 3, left);
-            Rect(VirtualWidth / 2, y, VirtualWidth / 2, 3, right);
+            int half = _canvasWidth / 2;
+            CanvasRect(0, y * S, half, 3 * S, left);
+            CanvasRect(half, y * S, _canvasWidth - half, 3 * S, right);
         }
 
         // ------------------------------------------------------------------ splash
@@ -1953,7 +2081,7 @@ namespace PoliceChaser
         private void DrawSplash()
         {
             Background(MissionTheme.Harbour);
-            Rect(0, 0, VirtualWidth, VirtualHeight, new Color(6, 8, 20, 235));
+            FullRect(0, VirtualHeight, new Color(6, 8, 20, 235));
 
             Image(_art.SplashArt, 80, 36, 160, 96);
             SirenStrip(0);
@@ -1997,15 +2125,15 @@ namespace PoliceChaser
             for (int y = 0; y < VirtualHeight; y++)
             {
                 float t = y / (float)VirtualHeight;
-                Rect(0, y, VirtualWidth, 1, Color.Lerp(palette.SkyTop, palette.SkyBottom, t * t));
+                FullRect(y, 1, Color.Lerp(palette.SkyTop, palette.SkyBottom, t * t));
             }
 
             Image(_art.Sun(MissionTheme.Neon), 240, 8, 48, 48);
-            Image(_art.Skyline(MissionTheme.Neon, false), 0, 54, 320, 96, Color.White * 0.9f);
+            TileImage(_art.Skyline(MissionTheme.Neon, false), 54, 320, 96, Color.White * 0.9f);
 
             for (int i = 0; i < 10; i++)
             {
-                Rect(0, 96 + i * 4, VirtualWidth, 2, new Color(20, 16, 40, 120));
+                FullRect(96 + i * 4, 2, new Color(20, 16, 40, 120));
             }
 
             SirenStrip(0);
@@ -2207,7 +2335,7 @@ namespace PoliceChaser
                 TextCentered("FIRE TO DEPLOY", 160, 182, Color.White);
             }
 
-            Rect(0, 200, VirtualWidth, 24, new Color(10, 12, 24));
+            FullRect(200, 24, new Color(10, 12, 24));
             TextCentered("STEER WITH LEFT/RIGHT - BRAKE DOWN - TURBO FIRE", 160, 206, new Color(140, 160, 200));
             TextCentered("MOBILE: ON-SCREEN PADS", 160, 217, new Color(100, 110, 140));
         }
@@ -2247,6 +2375,8 @@ namespace PoliceChaser
             }
 
             ThemePalette palette = _art.Palette(_mission.Theme);
+            _roadRenderer.ScreenWidth = _canvasWidth;
+            _roadRenderer.OriginX = _originX;
 
             float shakeAmount = (_shake * 3f + (_race.OffRoad ? 1.4f : 0f)) * S;
             float shakeX = MathF.Sin(_time * 90f) * shakeAmount;
@@ -2283,13 +2413,13 @@ namespace PoliceChaser
             {
                 float pulse = 0.5f + 0.5f * MathF.Sin(_time * 26f);
                 Color warn = new Color(255, 70, 70) * (0.30f + 0.45f * pulse);
-                Rect(0, 0, VirtualWidth, 3, warn);
-                Rect(0, VirtualHeight - 4, VirtualWidth, 4, warn);
+                FullRect(0, 3, warn);
+                FullRect(VirtualHeight - 4, 4, warn);
             }
 
             if (_screen == GameScreen.Paused)
             {
-                Rect(0, 0, VirtualWidth, VirtualHeight, new Color(0, 0, 0, 170));
+                FullRect(0, VirtualHeight, new Color(0, 0, 0, 170));
                 TextShadow("PAUSED", 160, 100, Color.White, 4);
                 TextCentered(MobilePlatform ? "TAP TO RESUME" : "FIRE TO RESUME - BACK TO QUIT", 160, 140,
                     new Color(190, 200, 230));
@@ -2346,8 +2476,14 @@ namespace PoliceChaser
                     new Color(255, 220, 130, alpha));
             }
 
-            Rect(0, 0, VirtualWidth, 2, new Color(255, 90, 70, (int)(120f * life)));
+            FullRect(0, 2, new Color(255, 90, 70, (int)(120f * life)));
         }
+
+        // The road is 4000 world units wide. A car is a shade over a lane, which is the
+        // same on-screen width the player's own sprite has at the bottom of the road, so
+        // traffic, suspects and the player all read at one scale.
+        private const float CarWorldWidth = 430f;
+        private const float VanWorldWidth = 520f;
 
         private void BuildWorldSprites()
         {
@@ -2386,7 +2522,7 @@ namespace PoliceChaser
                 Z = _race.RivalZ,
                 X = _race.RivalX,
                 Texture = suspectTexture,
-                WorldWidth = 760f,
+                WorldWidth = CarWorldWidth,
                 Tint = Color.White
             });
 
@@ -2406,7 +2542,7 @@ namespace PoliceChaser
                     X = car.X,
                     Texture = car.SameDirection ? _art.TrafficCars[car.Kind % _art.TrafficCars.Length]
                                                : _art.OncomingCars[car.Kind % _art.OncomingCars.Length],
-                    WorldWidth = car.Kind == 2 ? 980f : 800f,
+                    WorldWidth = car.Kind == 2 ? VanWorldWidth : CarWorldWidth,
                     Tint = Color.White
                 });
             }
@@ -2420,10 +2556,14 @@ namespace PoliceChaser
             }
 
             int count = _mission.Weather == Weather.Rain ? 80 : _mission.Weather == Weather.Snow ? 60 : 100;
+            count = count * _canvasWidth / RenderSettings.Width;
+
+            // Weather falls across the whole screen, not only the centred picture.
+            float span = _canvasWidth / (float)S;
 
             for (int i = 0; i < count; i++)
             {
-                float seedX = (i * 97.3f) % VirtualWidth;
+                float seedX = -OriginLogical + (i * 97.3f) % span;
                 float seedY = (i * 53.7f) % 200f;
                 float speed = _mission.Weather == Weather.Sandstorm ? 220f : 180f;
                 float x = seedX;
@@ -2447,14 +2587,12 @@ namespace PoliceChaser
 
             if (_mission.Weather == Weather.Sandstorm)
             {
-                Rect(0, 18, VirtualWidth, 190,
-                    new Color(220, 180, 120, 30));
+                FullRect(18, 190, new Color(220, 180, 120, 30));
             }
 
             if (_mission.Weather == Weather.Snow)
             {
-                Rect(0, 18, VirtualWidth, 190,
-                    new Color(200, 220, 255, 18));
+                FullRect(18, 190, new Color(200, 220, 255, 18));
             }
         }
 
@@ -2462,7 +2600,7 @@ namespace PoliceChaser
         {
             // Top HUD modelled on the arcade original: a white-framed score / timer / speed
             // panel, the stage readout underneath, and the HQ video link beside it.
-            Rect(0, 0, VirtualWidth, 48, new Color(6, 8, 18));
+            FullRect(0, 48, new Color(6, 8, 18));
             HudFrame(2, 2, 220, 44, new Color(236, 240, 248));
             HudFrame(226, 2, 92, 44, new Color(236, 240, 248));
 
@@ -2504,8 +2642,8 @@ namespace PoliceChaser
             }
 
             // Bottom console.
-            Rect(0, 208, VirtualWidth, VirtualHeight - 208, new Color(8, 10, 22));
-            Rect(0, 208, VirtualWidth, 1, new Color(60, 70, 110));
+            FullRect(208, VirtualHeight - 208, new Color(8, 10, 22));
+            FullRect(208, 1, new Color(60, 70, 110));
 
             Text("TURBO", 8, 214, new Color(140, 150, 185));
             Bar(48, 215, 100, 8, _race.Turbo, new Color(24, 28, 44),
@@ -2592,7 +2730,7 @@ namespace PoliceChaser
 
         private void DrawBustedOverlay()
         {
-            Rect(0, 0, VirtualWidth, VirtualHeight, new Color(0, 0, 0, 150));
+            FullRect(0, VirtualHeight, new Color(0, 0, 0, 150));
 
             int wobble = (int)(MathF.Sin(_time * 12f) * 2f);
             Panel(36, 62 + wobble, 248, 104, new Color(8, 14, 30, 240), new Color(120, 240, 140));
@@ -2610,7 +2748,7 @@ namespace PoliceChaser
 
         private void DrawMissionCleared()
         {
-            Rect(0, 0, VirtualWidth, VirtualHeight, new Color(0, 0, 0, 170));
+            FullRect(0, VirtualHeight, new Color(0, 0, 0, 170));
             Panel(30, 58, 260, 110, new Color(8, 14, 30, 245), new Color(250, 210, 80));
 
             TextShadow("MISSION CLEARED", 160, 68, new Color(250, 220, 120), 2);
@@ -2661,7 +2799,7 @@ namespace PoliceChaser
         private void DrawGameOver()
         {
             Background(MissionTheme.Harbour);
-            Rect(0, 0, VirtualWidth, VirtualHeight, new Color(0, 0, 0, 120));
+            FullRect(0, VirtualHeight, new Color(0, 0, 0, 120));
             SirenStrip(0);
 
             // The game over card.

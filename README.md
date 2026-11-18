@@ -1,14 +1,16 @@
 # Police Chaser
 
-An original 8-bit-style police pursuit racer for **Android (API 32), iOS 18+, macOS 26+ and
-Windows 11**, built with MonoGame and .NET 10. It is a faithful interpretation of the
+An original 8-bit-style police pursuit racer for **Android 12L+ (API 32, target 36), iOS 18+,
+macOS 26+ and Windows 11**, built with MonoGame and .NET 10. It is a faithful interpretation of the
 128K ZX Spectrum chase format - rear-view pursuit, a suspect car you have to ram, a burning
 clock, checkpoints, traffic and a radio - with smooth high-resolution graphics, new sound,
 nine missions across two series, three skill levels and a persistent high score table.
 
 All art is baked at 4x and the game renders to a 1280x960 target that is smoothly scaled to
 the window or device, so it is not an upscaled 320x240 picture: text, road, scenery and cars
-are all drawn at full resolution on every platform.
+are all drawn at full resolution on every platform. On phones the target is widened to the
+display's aspect with the picture centred in it, so the world reaches both screen edges
+instead of being letterboxed.
 
 Text uses an anti-aliased outline typeface rather than a bitmap font. The OFL-licensed
 **Chakra Petch** TTF is embedded in the core assembly and rasterised at the target resolution
@@ -109,8 +111,8 @@ dotnet publish src/PoliceChaser.Android -c Release -f net10.0-android36.0
 
 # iOS device build (bundle id uk.co.allthejohnsons.policechaser, iOS 18+)
 dotnet publish src/PoliceChaser.iOS -c Release -f net10.0-ios26.0 -r ios-arm64 \
-  -p:CodesignKey="Apple Development: Your Name (TEAMID)" \
-  -p:CodesignProvision=devel-police
+  -p:CodesignKey="Apple Development: <your name> (<TEAMID>)" \
+  -p:CodesignProvision=<your provisioning profile>
 xcrun devicectl device install app --device <UDID> artifacts/ios-device/PoliceChaser.app
 ```
 
@@ -122,6 +124,16 @@ Bundle/package identifiers:
 | Windows (MSIX) | `49556nodoid.PoliceChaser`, publisher `CN=A6EAEB04-6634-41C1-BDFE-695819ECE444` |
 
 The Windows package identity lives in `windows/Package.appxmanifest`.
+
+### Icons and splash screens
+
+`python3 tools/gen_icons.py` (needs `pip install pillow`) bakes the app icon and the
+launch/splash artwork for every platform from one procedural design: the full-bleed
+icon master, the padded macOS/window-tile variant, the iOS and Android icon sets
+(including the Android adaptive icon), the iOS launch lockup, the Android splash logo
+and the Windows `SplashScreen.png` asset referenced by the MSIX manifest. iOS 18 dark and
+tinted appearance variants come from the same design. Every file is
+generated, so change the design in the script rather than editing a PNG by hand.
 
 ## Fidelity reference
 
@@ -162,14 +174,21 @@ touch tap through the name-entry keys, and `touch` drives a tap through every in
 a pass/fail audit to `<shot>.audit.txt`.
 
 The game is landscape only. A portrait window shows a rotate prompt instead of a tiny, squashed
-picture, and the 4:3 canvas is scaled to the largest size the window allows.
+picture, and the 4:3 canvas is scaled to the largest size the window allows. Phone builds widen
+that canvas to the display's aspect instead: the 320x240 layout stays centred while the road,
+sky and scenery extend edge to edge, so the picture fills the screen and the margins beside a
+notch or camera cutout are part of the world rather than black bars.
+
+For store art, `python3 tools/gen_screenshots.py` (needs Pillow and a desktop build) drives
+that same harness over twelve screens and writes native 1280x960 captures plus captioned
+1920x1080 store frames to `artifacts/screenshots/`.
 
 ## Layout
 
 ```
 src/PoliceChaser.Core        shared game: simulation, renderer, art, audio, UI
 src/PoliceChaser.Desktop     Windows / macOS / Linux host
-src/PoliceChaser.Android     Android host (API 32)
+src/PoliceChaser.Android     Android host (API 32 minimum, target 36)
 src/PoliceChaser.iOS         iOS host (18+)
 src/PoliceChaser.macOS       macOS signing entitlements
 tests/PoliceChaser.Tests     xunit suite
