@@ -23,6 +23,15 @@ No artwork, code, music or data from any commercial game is included. Every spri
 music track, the logo and the app icon are generated procedurally by the game at runtime or
 baked by `tools/gen_icons.py`.
 
+## Documentation
+
+* [`docs/architecture.md`](docs/architecture.md) - projects, the frame loop, the scaling model,
+  the road renderer, the simulation rules and the persistence layer.
+* [`docs/building.md`](docs/building.md) - prerequisites and the per-platform build, signing and
+  packaging commands.
+* [`docs/tools.md`](docs/tools.md) - the icon, screenshot and store-art generators and the
+  self-test harness they drive.
+
 ## Gameplay
 
 You are the pursuing unit. The suspect is ahead and pulling away; close the gap and ram the
@@ -193,8 +202,9 @@ src/PoliceChaser.Desktop     Windows / macOS / Linux host
 src/PoliceChaser.Android     Android host (API 32 minimum, target 36)
 src/PoliceChaser.iOS         iOS host (18+)
 src/PoliceChaser.macOS       macOS signing entitlements
-tests/PoliceChaser.Tests     xunit suiteassets/                      generated icon master, .icns, Windows logos
-docs/                        screenshot used by this README
+tests/PoliceChaser.Tests     xunit suite
+assets/                      generated icon master, .icns, Windows logos
+docs/                        architecture, build and tool docs, README screenshot
 tools/                       icon generation, packaging, Fuse reference helpers
 windows/                      MSIX manifest (reserved Microsoft identity)
 ```
